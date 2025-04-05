@@ -1,2 +1,2 @@
 # spike-doctor
-Basic python shiny app for the analysis of whole-cell current clamp recordings
+Shiny python app for the analysis of whole-cell current clamp recordings
