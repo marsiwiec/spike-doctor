@@ -13,6 +13,7 @@
   # https://devenv.sh/packages/
   packages = with pkgs; [
     black
+    pyright
   ];
 
   # https://devenv.sh/languages/
