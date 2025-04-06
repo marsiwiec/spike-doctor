@@ -1617,7 +1617,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             height="600px",
         )
 
-    @session.download(
+    @render.download(
         filename=lambda: f"ABF_analysis_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
     )
     def download_analysis_csv():
@@ -1631,7 +1631,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             )  # Use more precision in CSV
             yield buf.getvalue()
 
-    @session.download(
+    @render.download(
         filename=lambda: f"ABF_analysis_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
     def download_analysis_excel():
@@ -1704,7 +1704,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
         yield excel_data
 
-    @session.download(
+    @render.download(
         filename=lambda: f"ABF_Summary_Plots_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     )
     def download_plots_pdf():
