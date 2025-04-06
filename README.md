@@ -5,7 +5,7 @@ Currently only works with Axon Instruments ABF format and current clamp recordin
 
 Uses the awesome [pyABF](https://github.com/swharden/pyABF) library for reading ABF files and [eFEL](https://github.com/openbraininstitute/eFEL) for feature extraction.
 
-![screenshot](https://github.com/marsiwiec/spike-doctor/blob/main/assets/spike-doctor.png?raw=true)
+<img src="https://github.com/marsiwiec/spike-doctor/blob/main/assets/spike-doctor.png?raw=true" width="80%">
 
 # How to use
 Clone the repo. 
