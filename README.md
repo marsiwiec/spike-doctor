@@ -18,4 +18,4 @@ Once you set up your Python environment, simply run `shiny run spike-doctor.py` 
 
 # eFEL features
 
-Scroll down the sidebar to choose which exact features you want included in the analysis results table. A sensible default has been preselected. The complete list of eFEL features along with their explanations is available as part of the ![eFEL documentation](https://efel.readthedocs.io/en/latest/eFeatures.html).
+Scroll down the sidebar to choose which exact features you want included in the analysis results table. A sensible default has been preselected. The complete list of eFEL features along with their explanations is available as part of the [eFEL documentation](https://efel.readthedocs.io/en/latest/eFeatures.html).
