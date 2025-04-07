@@ -25,10 +25,8 @@ from shiny.types import FileInfo
 # stimulus start and end times used for eFEL and other calculations.
 # Check your ABF file's header in Clampfit or pyABF to determine the correct index.
 # Common indices: 0 (first epoch), 1, 2, etc.
-SWEEP_EPOCHS_STIMULUS_INDEX: int = 2
 
 # --- eFEL Specific Settings ---
-EFEL_DERIVATIVE_THRESHOLD: float = 10.0
 DEFAULT_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
@@ -56,7 +54,7 @@ MANUAL_CALC_WIN_START_MS: float = 400.0
 MANUAL_CALC_WIN_END_MS: float = 500.0
 
 # --- Plotting & Debugging ---
-CREATE_DEBUG_PLOTS: bool = True  # Generate a detailed plot for one sweep per file
+# CREATE_DEBUG_PLOTS: bool = True  # Generate a detailed plot for one sweep per file
 MAX_RAW_PLOT_SWEEPS: int = 100  # Max sweeps to overlay on the raw trace plot
 
 # ==============================================================================
@@ -616,6 +614,10 @@ def run_analysis_on_abf(
     abf: Optional[pyabf.ABF],
     original_filename: str,
     user_selected_features: List[str],
+    stimulus_epoch_index: int,
+    detection_threshold: float,
+    derivative_threshold: float,
+    debug_plot: bool = True,
 ) -> Dict[str, Union[Optional[pd.DataFrame], Optional[plt.Figure]]]:
     """
     Analyzes a single ABF file using eFEL and manual calculations.
@@ -649,7 +651,7 @@ def run_analysis_on_abf(
 
     # 2. Determine Stimulus Timing
     stim_idx_start, stim_idx_end, stim_start_ms, stim_end_ms, stim_source = (
-        _get_stimulus_timing_from_epochs(abf, SWEEP_EPOCHS_STIMULUS_INDEX, abf_id_str)
+        _get_stimulus_timing_from_epochs(abf, stimulus_epoch_index, abf_id_str)
     )
     if stim_start_ms is None or stim_end_ms is None:
         _log_message(
@@ -704,8 +706,9 @@ def run_analysis_on_abf(
     )
     try:
         efel.reset()
-        efel.setDoubleSetting("strict_stiminterval", True)
-        efel.setDoubleSetting("DerivativeThreshold", EFEL_DERIVATIVE_THRESHOLD)
+        efel.set_setting("strict_stiminterval", True)
+        efel.set_setting("Threshold", detection_threshold)
+        efel.set_setting("DerivativeThreshold", derivative_threshold)
         _log_message(
             "DEBUG",
             abf_id_str,
@@ -915,7 +918,7 @@ def run_analysis_on_abf(
 
             # --- Generate Debug Plot (only once per file, for a middle sweep) ---
             if (
-                CREATE_DEBUG_PLOTS
+                debug_plot
                 and sweep_num == middle_sweep_index_for_debug
                 and not debug_plot_generated
             ):
@@ -1158,34 +1161,54 @@ app_ui = ui.page_fluid(
             ui.hr(),
             ui.h5("Analysis Parameters"),
             ui.tags.b("Stimulus Definition:"),
-            ui.tags.ul(
-                ui.tags.li(f"Method: From ABF Header (SweepEpochs)"),
-                ui.tags.li(f"Epoch Index Used: {SWEEP_EPOCHS_STIMULUS_INDEX}"),
+            ui.input_numeric(
+                "stimulus_epoch_index",
+                "Stimulus Epoch Index (0-based):",
+                value=2,
+                min=0,
+                step=1,
             ),
-            ui.tags.b("Current Input (for eFEL):"),
-            ui.tags.ul(
-                ui.tags.li(
-                    f"Average current during {EFEL_AVG_CURRENT_WIN_START_MS:.0f}-{EFEL_AVG_CURRENT_WIN_END_MS:.0f} ms"
-                ),
-                ui.tags.li(f"(Passed as 'stimulus_current' in nA to eFEL)"),
+            # ui.tags.ul(
+            #     ui.tags.li("Method: From ABF Header (SweepEpochs) using specified index."),
+            #     ui.tags.li(
+            #         "Important: Verify the correct index for your protocol in Clampfit/pyABF."
+            #     ),
+            # ),
+            ui.tags.b("Spike Detection:"),
+            ui.input_numeric(
+                "detection_threshold",
+                "Detection Threshold (mV):",
+                value=-20,
+                step=1,
             ),
-            ui.tags.b("Manual Calculations (Rin, Cm):"),
-            ui.tags.ul(
-                ui.tags.li(
-                    f"Analysis Window: {MANUAL_CALC_WIN_START_MS:.0f}-{MANUAL_CALC_WIN_END_MS:.0f} ms"
-                ),
-                ui.tags.li("Performed only if eFEL spike_count = 0"),
-                ui.tags.li("Uses eFEL V_base and Tau_decay"),
-                ui.tags.li("Outputs: input_resistance_Mohm, capacitance_pF"),
+            ui.input_numeric(
+                "derivative_threshold",
+                "Derivative Threshold (mV/ms):",
+                value=10,
+                step=1,
             ),
-            ui.tags.b("eFEL Spike Detection:"),
-            ui.tags.ul(
-                ui.tags.li(f"dV/dt Threshold: {EFEL_DERIVATIVE_THRESHOLD} mV/ms")
-            ),
+            # ui.tags.b("Current Input (for eFEL):"),
+            # ui.tags.ul(
+            #     ui.tags.li(
+            #         f"Average current during {EFEL_AVG_CURRENT_WIN_START_MS:.0f}-{EFEL_AVG_CURRENT_WIN_END_MS:.0f} ms"
+            #     ),
+            #     ui.tags.li(f"(Passed as 'stimulus_current' in nA to eFEL)"),
+            # ),
+            # ui.tags.b("Manual Calculations (Rin, Cm):"),
+            # ui.tags.ul(
+            #     ui.tags.li(
+            #         f"Analysis Window: {MANUAL_CALC_WIN_START_MS:.0f}-{MANUAL_CALC_WIN_END_MS:.0f} ms"
+            #     ),
+            #     ui.tags.li("Performed only if eFEL spike_count = 0"),
+            #     ui.tags.li("Uses eFEL V_base and Tau_decay"),
+            #     ui.tags.li("Outputs: input_resistance_Mohm, capacitance_pF"),
+            # ),
             ui.tags.b("Options:"),
             ui.tags.ul(
-                ui.tags.li(
-                    f"Generate Debug Plots: {'Yes' if CREATE_DEBUG_PLOTS else 'No'}"
+                ui.input_checkbox(
+                    "debug_plots",
+                    "Generate Debug Plots",
+                    True,
                 )
             ),
             ui.hr(),
@@ -1280,6 +1303,9 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     file_data["abf_object"],
                     file_data["original_filename"],
                     input.selected_efel_features(),
+                    input.stimulus_epoch_index(),
+                    input.detection_threshold(),
+                    input.derivative_threshold(),
                 ),
             }
             for file_data in loaded_abf_data()
@@ -1340,6 +1366,8 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             f"Load Errors: {num_load_err}\n"
             f"Successfully Analyzed: {num_analyzed_ok}\n"
             f"Analysis Skipped/Failed: {num_analysis_failed}\n"
+            f"---\n"
+            f"Stimulus Epoch Index Used: {input.stimulus_epoch_index()}\n" # Display used index
             f"---\n"
         )
 
@@ -1564,7 +1592,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     @render.ui
     def dynamic_debug_plots_ui():
         """Dynamically generates UI for the debug plots."""
-        if not CREATE_DEBUG_PLOTS:
+        if not input.debug_plots():
             return ui.tags.p("Debug plots are disabled in the configuration.")
 
         results = analysis_results_list()
