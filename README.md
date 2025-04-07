@@ -15,3 +15,7 @@ A requirements.txt file is provided for any python dependencies.
 The repo also contains a working [devenv](https://devenv.sh/) setup, which will take care of setting everything up for you including a local virtual environment with a working python version.
 
 Once you set up your Python environment, simply run `shiny run spike-doctor.py` and go to http://127.0.0.1:8000 in your web browser.
+
+# eFEL features
+
+Scroll down the sidebar to choose which exact features you want included in the analysis results table. A sensible default has been preselected. The complete list of eFEL features along with their explanations is available as part of the ![eFEL documentation](https://efel.readthedocs.io/en/latest/eFeatures.html).
