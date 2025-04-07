@@ -1204,17 +1204,15 @@ app_ui = ui.page_fluid(
             #     ui.tags.li("Outputs: input_resistance_Mohm, capacitance_pF"),
             # ),
             ui.tags.b("Options:"),
-            ui.tags.ul(
-                ui.input_checkbox(
-                    "debug_plots",
-                    "Generate Debug Plots",
-                    True,
-                )
-            ),
-            ui.hr(),
+            ui.input_checkbox(
+                "debug_plots",
+                "Generate Debug Plots",
+                True,
+                ),
+            ui.h5("eFEL Features to Calculate:"),
             ui.input_checkbox_group(
                 "selected_efel_features",
-                "Select eFEL Features to Calculate:",
+                label=None,       
                 choices=AVAILABLE_EFEL_FEATURES,
                 selected=VALID_DEFAULT_FEATURES,
             ),
