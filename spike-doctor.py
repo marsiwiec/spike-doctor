@@ -1505,7 +1505,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                                 12,
                                 ui.img(
                                     src=plot_src,
-                                    style="width: 100%; height: auto; border: 1px solid #ddd;",
+                                    style="width: 100%; height: auto; max-width: 1400px; border: 1px solid #ddd;",
                                 ),
                             )
                         ),
