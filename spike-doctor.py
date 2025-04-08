@@ -39,18 +39,16 @@ DEFAULT_EFEL_FEATURES: List[str] = [
 ]
 # Features needed internally even if not selected by the user
 REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
+    "spike_count",
     "voltage_base",
     "decay_time_constant_after_stim",
+    "ohmic_input_resistance",
 ]
 
 # --- Window Definitions (in milliseconds from start of sweep) ---
 # Window for calculating the AVERAGE stimulus current injected (used by eFEL trace dict)
 EFEL_AVG_CURRENT_WIN_START_MS: float = 400.0
 EFEL_AVG_CURRENT_WIN_END_MS: float = 500.0
-
-# Window for calculating Vm_mean and current_mean_pA for MANUAL Rin/Cm calculations
-MANUAL_CALC_WIN_START_MS: float = 400.0
-MANUAL_CALC_WIN_END_MS: float = 500.0
 
 # --- Plotting & Debugging ---
 MAX_RAW_PLOT_SWEEPS: int = 100  # Max sweeps to overlay on the raw trace plot
@@ -201,106 +199,6 @@ def _validate_abf_for_analysis(abf: pyabf.ABF, abf_id_str: str) -> bool:
     return True
 
 
-def _get_stimulus_timing_from_epochs(
-    abf: pyabf.ABF, stimulus_epoch_index: int, abf_id_str: str
-) -> Tuple[Optional[int], Optional[int], Optional[float], Optional[float], str]:
-    """
-    Extracts stimulus start/end indices and times using abf.sweepEpochs.
-    Returns (start_idx, end_idx, start_ms, end_ms, source_description).
-    """
-    try:
-        if not hasattr(abf, "sweepEpochs"):
-            raise AttributeError("ABF object missing 'sweepEpochs' attribute.")
-
-        epoch_table = abf.sweepEpochs
-        if not hasattr(epoch_table, "p1s") or not hasattr(epoch_table, "p2s"):
-            raise AttributeError("SweepEpochs missing 'p1s' or 'p2s' lists.")
-        if epoch_table.p1s is None or epoch_table.p2s is None:
-            raise ValueError("SweepEpochs 'p1s' or 'p2s' is None.")
-
-        if not (
-            0 <= stimulus_epoch_index < len(epoch_table.p1s)
-            and 0 <= stimulus_epoch_index < len(epoch_table.p2s)
-        ):
-            raise IndexError(
-                f"Stimulus index {stimulus_epoch_index} is out of bounds "
-                f"for {len(epoch_table.p1s)} epochs."
-            )
-
-        start_idx = epoch_table.p1s[stimulus_epoch_index]
-        end_idx = epoch_table.p2s[stimulus_epoch_index]
-
-        # Validate indices
-        if not isinstance(start_idx, (int, np.integer)) or not isinstance(
-            end_idx, (int, np.integer)
-        ):
-            raise TypeError("Epoch indices are not integers.")
-
-        # Clamp end_idx to actual sweep length
-        end_idx = min(end_idx, abf.sweepPointCount)
-
-        if not (0 <= start_idx < end_idx <= abf.sweepPointCount):
-            raise ValueError(
-                f"Invalid epoch indices derived: start={start_idx}, end={end_idx} "
-                f"(Sweep points={abf.sweepPointCount})."
-            )
-
-        stim_start_ms = (start_idx / abf.dataRate) * 1000.0
-        stim_end_ms = (end_idx / abf.dataRate) * 1000.0
-        stim_source = f"SweepEpochs(Idx {stimulus_epoch_index})"
-
-        _log_message(
-            "DEBUG",
-            abf_id_str,
-            None,
-            f"Stim timing from {stim_source}: {start_idx}-{end_idx} pts "
-            f"({stim_start_ms:.2f}-{stim_end_ms:.2f} ms)",
-        )
-        return start_idx, end_idx, stim_start_ms, stim_end_ms, stim_source
-
-    except Exception as e:
-        _log_message(
-            "ERROR",
-            abf_id_str,
-            None,
-            f"Failed to get stimulus timing via SweepEpochs: {e}",
-        )
-        return None, None, None, None, "Error"
-
-
-def _calculate_time_window_indices(
-    abf: pyabf.ABF, start_ms: float, end_ms: float, window_name: str, abf_id_str: str
-) -> Tuple[Optional[int], Optional[int]]:
-    """Converts time window in ms to sample indices, clamping to sweep bounds."""
-    try:
-        idx_start = int(start_ms * abf.dataPointsPerMs)
-        idx_end = int(end_ms * abf.dataPointsPerMs)
-
-        # Clamp indices to valid range within a sweep
-        idx_start = max(0, idx_start)
-        idx_end = min(abf.sweepPointCount, idx_end)
-
-        if idx_start >= idx_end:
-            _log_message(
-                "WARN",
-                abf_id_str,
-                None,
-                f"{window_name} window invalid or zero-width "
-                f"({start_ms:.1f}-{end_ms:.1f} ms -> {idx_start}-{idx_end} pts).",
-            )
-            return None, None
-
-        return idx_start, idx_end
-    except Exception as e:
-        _log_message(
-            "ERROR",
-            abf_id_str,
-            None,
-            f"Failed to calculate {window_name} window indices: {e}",
-        )
-        return None, None
-
-
 # ==============================================================================
 # Plotting Functions
 # ==============================================================================
@@ -378,11 +276,11 @@ def plot_raw_traces(
         plot_title += " (CC)" if is_current_clamp(abf) else " (VC?)"
         ax.set_title(plot_title, fontsize=9)
         ax.set_xlabel(
-            f"{getattr(abf, 'sweepLabelX', 'Time')} ({getattr(abf, 'sweepUnitsX', 's')})",
+            f"{getattr(abf, 'sweepLabelX', 'Time')}",
             fontsize=8,
         )
         ax.set_ylabel(
-            f"{getattr(abf, 'sweepLabelY', 'Signal')} ({getattr(abf, 'sweepUnitsY', 'mV')})",
+            f"{getattr(abf, 'sweepLabelY', 'Signal')}",
             fontsize=8,
         )
         ax.tick_params(axis="both", which="major", labelsize=8)
@@ -396,7 +294,7 @@ def plot_raw_traces(
 
 def plot_feature_vs_current(
     analysis_df: Optional[pd.DataFrame],
-    feature_name: str,
+    feature_name,
     current_col: str,
     filename: str,
     abf: Optional[pyabf.ABF],  # Used for units
@@ -468,8 +366,7 @@ def plot_feature_vs_current(
         y_label += f" ({feature_units})"
 
     current_label = current_col.replace("_", " ").title()
-    # if current_col == "current_step_pA": # Already handled by default
-    #     current_units = "pA"
+
     current_label += f" ({current_units})"
 
     try:
@@ -503,7 +400,7 @@ def plot_phase_plane(
     ax: plt.Axes = None,
 ) -> None:
     """Generates a phase-plane plot onto given axes."""
-    plot_title = f"Phase Plane"
+    plot_title = f"Phase Plane Plot at 2x Rheobase\n"
     file_sweep_info = f"{filename}"
     if sweep_num is not None:
         file_sweep_info += f" (Sw {sweep_num}"
@@ -881,38 +778,6 @@ def run_analysis_on_abf(
     if not _validate_abf_for_analysis(abf, abf_id_str):
         return analysis_output
 
-    # 2. Determine Stimulus Timing
-    stim_idx_start, stim_idx_end, stim_start_ms, stim_end_ms, stim_source = (
-        _get_stimulus_timing_from_epochs(abf, stimulus_epoch_index, abf_id_str)
-    )
-    if stim_start_ms is None or stim_end_ms is None:
-        _log_message(
-            "ERROR",
-            abf_id_str,
-            None,
-            "Could not determine stimulus timing. Aborting analysis.",
-        )
-        return analysis_output  # Error logged in timing function
-
-    # 3. Determine Calculation Window Indices
-    idx_manual_start, idx_manual_end = _calculate_time_window_indices(
-        abf, MANUAL_CALC_WIN_START_MS, MANUAL_CALC_WIN_END_MS, "Manual Calc", abf_id_str
-    )
-    idx_efel_curr_start, idx_efel_curr_end = _calculate_time_window_indices(
-        abf,
-        EFEL_AVG_CURRENT_WIN_START_MS,
-        EFEL_AVG_CURRENT_WIN_END_MS,
-        "eFEL Current Avg",
-        abf_id_str,
-    )
-    if idx_efel_curr_start is None or idx_efel_curr_end is None:
-        _log_message(
-            "ERROR",
-            abf_id_str,
-            None,
-            "Failed to define eFEL current averaging window. Aborting.",
-        )
-        return analysis_output
 
     # 4. Determine Current Unit Conversion Factor (raw units -> pA)
     current_unit_factor = 1.0  # Assume pA by default
@@ -932,7 +797,7 @@ def run_analysis_on_abf(
             f"Command units are '{current_unit_raw}'. Assuming pA.",
         )
 
-    # 5. Prepare eFEL
+    # Prepare eFEL
     all_efel_features_needed = list(
         set(user_selected_features) | set(REQUIRED_INTERNAL_EFEL_FEATURES)
     )
@@ -956,7 +821,7 @@ def run_analysis_on_abf(
         )
         return analysis_output
 
-    # 6. Sweep Loop and Analysis
+    # Sweep Loop and Analysis
     sweep_results_list = []
     debug_plot_generated = False  # Flag to ensure only one debug plot per file
     # Choose a sweep for debug plot: prefer middle, but ensure it's a valid index
@@ -969,44 +834,16 @@ def run_analysis_on_abf(
         for sweep_num in abf.sweepList:
             abf.setSweep(sweep_num)
 
-            # --- Calculate Average Stimulus Current (for eFEL trace dict, in nA) ---
-            stimulus_current_for_efel_nA = 0.0
-            try:
-                if not hasattr(abf, "sweepC") or not isinstance(abf.sweepC, np.ndarray):
-                    raise TypeError(
-                        "Sweep command data (sweepC) is missing or not a numpy array."
-                    )
-                # Average over the defined eFEL current window
-                avg_sweepC_raw = np.nanmean(
-                    abf.sweepC[idx_efel_curr_start:idx_efel_curr_end]
-                )
-                if np.isnan(avg_sweepC_raw):
-                    # If window is all NaN, maybe try stimulus window itself?
-                    # For now, raise error as config implies window should be valid
-                    raise ValueError(
-                        "Current data in eFEL avg window contains only NaNs."
-                    )
-                # Convert raw average current to nA for eFEL standard
-                stimulus_current_for_efel_nA = avg_sweepC_raw * (
-                    current_unit_factor / 1000.0
-                )
-            except Exception as avg_err:
-                # Warn but continue, assuming 0 current for eFEL trace
-                _log_message(
-                    "WARN",
-                    abf_id_str,
-                    sweep_num,
-                    f"Failed to calculate average stimulus current for eFEL trace: {avg_err}. Using 0 nA.",
-                )
 
-            # --- Prepare eFEL Trace Input ---
-            # Times must be in ms, Voltage in mV, Current in nA
+            # --- Calculate Average Stimulus Current (for eFEL trace dict, in nA) ---
+            stimulus_current_for_efel_nA = abf.sweepEpochs.levels[stimulus_epoch_index] / 1000
+
             trace_for_efel = {
                 "T": abf.sweepX * 1000.0,
                 "V": abf.sweepY,
-                "stim_start": [stim_start_ms],
-                "stim_end": [stim_end_ms],
-                "stimulus_current": [float(stimulus_current_for_efel_nA)],
+                "stim_start": [abf.sweepEpochs.p1s[stimulus_epoch_index] * abf.dataSecPerPoint * 1000.0],
+                "stim_end": [abf.sweepEpochs.p2s[stimulus_epoch_index] * abf.dataSecPerPoint * 1000.0],
+                "stimulus_current": [float(stimulus_current_for_efel_nA) * current_unit_factor],
             }
 
             # --- Run eFEL ---
@@ -1068,129 +905,33 @@ def run_analysis_on_abf(
                 for feat in all_efel_features_needed
             }
 
-            # --- Manual Calculations (Rin, Cm) ---
-            current_mean_pA = np.nan  # Current during manual window (pA)
-            Vm_mean = np.nan  # Voltage during manual window (mV)
-            R_in_manual_Mohm = np.nan
-            tau_m_efel_ms = np.nan
+            # --- Manual Calculations (Cm) ---
+
             Cm_manual_pF = np.nan
+            tau_efel_ms = efel_results_parsed.get("decay_time_constant_after_stim", np.nan)
+            R_in_MOhm = efel_results_parsed.get("ohmic_input_resistance", np.nan)
 
-            if idx_manual_start is not None and idx_manual_end is not None:
-                try:
-                    # Ignore warnings during nanmean (e.g., if window has NaNs)
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", category=RuntimeWarning)
-                        # Check if sweepC exists before accessing it
-                        if hasattr(abf, "sweepC") and isinstance(
-                            abf.sweepC, np.ndarray
-                        ):
-                            current_mean_pA = (
-                                np.nanmean(abf.sweepC[idx_manual_start:idx_manual_end])
-                                * current_unit_factor
-                            )
-                        else:
-                            _log_message(
-                                "WARN",
-                                abf_id_str,
-                                sweep_num,
-                                "sweepC not available for manual current calc.",
-                            )
-                            current_mean_pA = np.nan  # Explicitly set to NaN
-
-                        # Check if sweepY exists before accessing it
-                        if hasattr(abf, "sweepY") and isinstance(
-                            abf.sweepY, np.ndarray
-                        ):
-                            Vm_mean = np.nanmean(
-                                abf.sweepY[idx_manual_start:idx_manual_end]
-                            )
-                        else:
-                            _log_message(
-                                "WARN",
-                                abf_id_str,
-                                sweep_num,
-                                "sweepY not available for manual Vm calc.",
-                            )
-                            Vm_mean = np.nan  # Explicitly set to NaN
-
-                except Exception as calc_err:
-                    _log_message(
-                        "WARN",
-                        abf_id_str,
-                        sweep_num,
-                        f"Manual Vm/I calculation failed: {calc_err}",
-                    )
-                    # Ensure values are NaN on error
-                    current_mean_pA = np.nan
-                    Vm_mean = np.nan
-
+            
             # Ensure spike_count is a valid integer (0 if NaN/None)
             spike_count = efel_results_parsed.get("spike_count", np.nan)
             spike_count = 0 if pd.isna(spike_count) else int(spike_count)
 
             V_base_efel = efel_results_parsed.get("voltage_base", np.nan)
 
-            # Calculate Rin only if conditions met
-            if (
-                spike_count == 0
-                and pd.notna(current_mean_pA)
-                and not np.isclose(current_mean_pA, 0)  # Avoid division by zero
-                and pd.notna(Vm_mean)
-                and pd.notna(V_base_efel)
-            ):
-                try:
-                    delta_V = Vm_mean - V_base_efel
-                    # Ensure current is not effectively zero before dividing
-                    if not np.isclose(current_mean_pA, 0):
-                        R_in_manual_Mohm = (
-                            delta_V / current_mean_pA
-                        ) * 1000.0  # mV/pA -> kOhm; *1000 -> MOhm
-                        if not np.isfinite(
-                            R_in_manual_Mohm
-                        ):  # Check for Inf/-Inf result
-                            R_in_manual_Mohm = np.nan  # Treat non-finite as NaN
-                    else:
-                        R_in_manual_Mohm = (
-                            np.nan
-                        )  # Treat zero current case as NaN for Rin
-
-                except (ZeroDivisionError, FloatingPointError) as div_err:
-                    # This should be caught by isclose, but handle defensively
-                    _log_message(
-                        "WARN",
-                        abf_id_str,
-                        sweep_num,
-                        f"Division error during Rin calc: {div_err}",
-                    )
-                    R_in_manual_Mohm = np.nan
-                except Exception as rin_err:
-                    _log_message(
-                        "WARN",
-                        abf_id_str,
-                        sweep_num,
-                        f"Manual Rin calculation failed: {rin_err}",
-                    )
-                    R_in_manual_Mohm = np.nan
-
-            # Get Tau from eFEL results (decay_time_constant_after_stim)
-            tau_m_efel_ms = efel_results_parsed.get(
-                "decay_time_constant_after_stim", np.nan
-            )
-
             # Calculate Cm only if Tau and Rin are valid and positive
             if (
-                pd.notna(tau_m_efel_ms)
-                and tau_m_efel_ms > 0
-                and pd.notna(R_in_manual_Mohm)
-                and R_in_manual_Mohm > 0
-                and np.isfinite(tau_m_efel_ms)  # Ensure tau is finite
-                and np.isfinite(R_in_manual_Mohm)  # Ensure Rin is finite
+                pd.notna(tau_efel_ms)
+                and tau_efel_ms > 0
+                and pd.notna(R_in_MOhm)
+                and R_in_MOhm > 0
+                and np.isfinite(tau_efel_ms)
+                and np.isfinite(R_in_MOhm)
             ):
                 try:
                     # Cm (pF) = Tau (ms) / Rin (MOhm) * 1000
-                    Cm_manual_pF = (tau_m_efel_ms / R_in_manual_Mohm) * 1000.0
-                    if not np.isfinite(Cm_manual_pF):  # Check for Inf/-Inf
-                        Cm_manual_pF = np.nan  # Treat non-finite as NaN
+                    Cm_manual_pF = (tau_efel_ms / R_in_MOhm) * 1000.0
+                    if not np.isfinite(Cm_manual_pF):
+                        Cm_manual_pF = np.nan
                 except (ZeroDivisionError, FloatingPointError) as div_err:
                     # Should be caught by Rin>0 check, but handle defensively
                     _log_message(
@@ -1213,11 +954,9 @@ def run_analysis_on_abf(
             sweep_data = {
                 "filename": original_filename,
                 "sweep": sweep_num,
-                current_col_name: current_mean_pA,  # Use the specified column name
-                "input_resistance_Mohm": R_in_manual_Mohm,
-                "time_constant_ms": tau_m_efel_ms,
+                CURRENT_COL_NAME: trace_for_efel["stimulus_current"][0] * 1000,
                 "capacitance_pF": Cm_manual_pF,
-                **{  # Add requested eFEL features
+                **{ 
                     feat: efel_results_parsed.get(feat, np.nan)
                     for feat in user_selected_features
                 },
@@ -1234,12 +973,9 @@ def run_analysis_on_abf(
                 for feature in sweep_data:
                     if "time_to_" in feature.lower() or "latency" in feature.lower():
                         sweep_data[feature] = np.nan
-                # Also invalidate Rin/Cm if spike_count is 0 (as they depend on V_base/tau)
-                # Although Rin calc logic already checks spike_count==0, be explicit
-                sweep_data["input_resistance_Mohm"] = np.nan
+            if spike_count > 0:
                 sweep_data["capacitance_pF"] = np.nan
-                # Invalidate voltage deflection if no spikes? Depends on definition. eFEL might handle this.
-                # sweep_data["voltage_deflection"] = np.nan
+
 
             sweep_results_list.append(sweep_data)
 
@@ -1265,40 +1001,12 @@ def run_analysis_on_abf(
                     )
                     # Highlight eFEL stimulus window
                     axs[0].axvspan(
-                        stim_start_ms / 1000.0,
-                        stim_end_ms / 1000.0,
+                        xmin = trace_for_efel["stim_start"][0] / 1000.0,
+                        xmax = trace_for_efel["stim_end"][0] / 1000.0,
                         color="salmon",  # Use a different color
                         alpha=0.2,
-                        label=f"eFEL Stim ({stim_source})",
                         zorder=-10,  # Place behind data
                     )
-                    # Highlight Manual calc window (if valid)
-                    if (
-                        idx_manual_start is not None
-                        and idx_manual_end is not None
-                        and idx_manual_end > idx_manual_start
-                    ):
-                        axs[0].axvspan(
-                            abf.sweepX[idx_manual_start],
-                            abf.sweepX[idx_manual_end - 1],  # Use index before end
-                            color="skyblue",  # Use a different color
-                            alpha=0.25,
-                            label="Manual Calc Win",
-                            zorder=-10,
-                        )
-                        # Plot Vm_mean line within the window
-                        if pd.notna(Vm_mean):
-                            axs[0].hlines(
-                                Vm_mean,
-                                abf.sweepX[idx_manual_start],
-                                abf.sweepX[idx_manual_end - 1],
-                                color="deepskyblue",  # Darker shade
-                                linestyle="-",  # Solid line for mean marker
-                                lw=1.5,
-                                label=f"Vm Mean (Manual): {Vm_mean:.1f} mV",
-                                zorder=0,  # Ensure visible
-                            )
-
                     # Plot V_base from eFEL (if valid)
                     if pd.notna(V_base_efel):
                         axs[0].axhline(
@@ -1338,71 +1046,15 @@ def run_analysis_on_abf(
 
                     # Highlight eFEL stimulus window
                     axs[1].axvspan(
-                        stim_start_ms / 1000.0,
-                        stim_end_ms / 1000.0,
+                        xmin = trace_for_efel["stim_start"][0] / 1000.0,
+                        xmax = trace_for_efel["stim_end"][0] / 1000.0,
                         color="salmon",
                         alpha=0.2,
                         zorder=-10,
                     )
-                    # Highlight Manual calc window (if valid)
-                    if (
-                        idx_manual_start is not None
-                        and idx_manual_end is not None
-                        and idx_manual_end > idx_manual_start
-                    ):
-                        axs[1].axvspan(
-                            abf.sweepX[idx_manual_start],
-                            abf.sweepX[idx_manual_end - 1],
-                            color="skyblue",
-                            alpha=0.25,
-                            zorder=-10,
-                        )
-                        # Plot I_mean line within the manual window (if valid)
-                        if pd.notna(current_mean_pA):
-                            axs[1].hlines(
-                                current_mean_pA,
-                                abf.sweepX[idx_manual_start],
-                                abf.sweepX[idx_manual_end - 1],
-                                color="deepskyblue",
-                                linestyle="-",  # Solid marker
-                                lw=1.5,
-                                label=f"I Mean (Manual): {current_mean_pA:.1f} {output_plot_unit}",
-                                zorder=0,
-                            )
-
-                    # Highlight eFEL current average window (if valid)
-                    if (
-                        idx_efel_curr_start is not None
-                        and idx_efel_curr_end is not None
-                        and idx_efel_curr_end > idx_efel_curr_start
-                    ):
-                        axs[1].axvspan(
-                            abf.sweepX[idx_efel_curr_start],
-                            abf.sweepX[idx_efel_curr_end - 1],
-                            color="lightgreen",  # Different color
-                            alpha=0.3,
-                            label="eFEL I Avg Win",
-                            zorder=-10,
-                        )
-                        # Plot eFEL average current line within its window (if valid)
-                        if pd.notna(stimulus_current_for_efel_nA):
-                            # Convert back to pA for plotting consistency
-                            current_for_plot = stimulus_current_for_efel_nA * 1000.0
-                            axs[1].hlines(
-                                current_for_plot,
-                                abf.sweepX[idx_efel_curr_start],
-                                abf.sweepX[idx_efel_curr_end - 1],
-                                color="forestgreen",  # Darker shade
-                                linestyle="-",  # Solid marker
-                                lw=1.5,
-                                label=f"I Avg (eFEL): {current_for_plot:.1f} {output_plot_unit}",
-                                zorder=0,
-                            )
-
-                    axs[1].set_ylabel(f"Current ({output_plot_unit})")
-                    axs[1].set_xlabel(f"Time ({getattr(abf, 'sweepUnitsX', 's')})")
-                    axs[1].legend(fontsize=7, loc="best")
                     axs[1].grid(True, linestyle=":", alpha=0.5)
+                    axs[1].set_ylabel(f"Current ({getattr(abf, 'sweepUnitsC', 'pA')})")
+                    axs[1].set_xlabel("Time (s)")
 
                     # fig_debug.tight_layout() # Use set_layout_engine instead
                     analysis_output["debug_plot_fig"] = fig_debug
@@ -1834,7 +1486,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             try:
                 plot_fig, axes = plt.subplots(
                     1, 3, figsize=(12, 3.5)
-                )  # Adjust figsize as needed
+                )
                 plot_fig.set_layout_engine("tight")
 
                 # Use the centralized plotting function to draw on these axes
@@ -1848,13 +1500,12 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     file_ui = ui.div(
                         ui.hr() if i > 0 else None,
                         ui.h5(filename),
-                        # Display the single image containing all 3 plots
                         ui.row(
                             ui.column(
                                 12,
                                 ui.img(
                                     src=plot_src,
-                                    style="width: 100%; max-width: 900px; height: auto; border: 1px solid #ddd;",
+                                    style="width: 100%; height: auto; border: 1px solid #ddd;",
                                 ),
                             )
                         ),
@@ -2017,7 +1668,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     )
     def download_analysis_excel():
         """Downloads analysis results. Each sheet represents one dependent variable.
-        Within each sheet, rows are indexed by sweep and current_step_pA,
+        Within each sheet, rows are indexed by sweep and CURRENT_COL_NAME,
         and columns correspond to unique filenames. Yields the binary
         content of the Excel file.
         """
