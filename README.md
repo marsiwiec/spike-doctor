@@ -1,5 +1,5 @@
 # Spike-doctor
-Basic Shiny app written in Python for the analysis of whole-cell current clamp recordings focusing mostly on spike detection and supthreshold/suprathreshold feature extraction.
+Basic Shiny app written in Python for the analysis of whole-cell current clamp recordings focusing mostly on spike detection and subthreshold/suprathreshold feature extraction.
 
 Currently only works with Axon Instruments ABF format and current clamp recordings.
 
