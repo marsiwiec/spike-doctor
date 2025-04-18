@@ -13,9 +13,7 @@ from shiny import App, render, ui, reactive, req
 
 from modules import analysis, constants, helper, plotting
 
-# ==============================================================================
-# Shiny UI Definition
-# ==============================================================================
+
 try:
     AVAILABLE_EFEL_FEATURES = sorted(efel.get_feature_names())
 except Exception as e:
@@ -33,7 +31,7 @@ app_ui = ui.page_fluid(
     ui.layout_sidebar(
         ui.sidebar(
             ui.h4("Spike Doctor"),
-            ui.h5("I'm gonna diagnose your spikes!"),
+            ui.h5("Analyze current clamp ABF files"),
             ui.input_file(
                 "abf_files", "Select ABF File(s):", accept=[".abf"], multiple=True
             ),
@@ -106,9 +104,7 @@ app_ui = ui.page_fluid(
 )
 
 
-# ==============================================================================
-# Shiny Server Logic
-# ==============================================================================
+
 def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
     loaded_abf_data = reactive.Value([])
