@@ -190,7 +190,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         Combines analysis results from individual files into a single DataFrame.
         Returns an empty DataFrame if no valid results exist or on error.
         """
-        results_list = analysis_results_list()  # Get the list of result dicts
+        results_list = analysis_results_list()  
         helper._log_message(
             "DEBUG",
             "App",
@@ -251,7 +251,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             f"Analysis Skipped/Failed: {num_analysis_failed}\n"
             f"---\n"
             f"--- Current Settings ---\n"
-            f"Stimulus Epoch Index Used: {input.stimulus_epoch_index()}\n"  # Display used index
+            f"Stimulus Epoch Index Used: {input.stimulus_epoch_index()}\n"  
             f"Spike V Threshold: {input.detection_threshold()} mV\n"
             f"Spike dV/dt Threshold: {input.derivative_threshold()} mV/ms\n"
             f"Debug Plots Enabled: {'Yes' if input.debug_plots() else 'No'}\n"
@@ -259,7 +259,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             f"---\n"
         )
 
-        # Show info for the first successfully loaded file
         first_ok_file_data = next((r for r in results if r.get("abf_object")), None)
         if first_ok_file_data:
             summary += f"First File Info ({first_ok_file_data['original_filename']}):\n"
@@ -318,7 +317,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 )
                 plot_fig.set_layout_engine("tight")
 
-                # Use the centralized plotting function to draw on these axes
                 plotting._generate_summary_plots_for_file(
                     result_data, axes, current_col=constants.CURRENT_COL_NAME
                 )
@@ -341,7 +339,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     )
                     ui_elements.append(file_ui)
                 else:
-                    # Handle case where figure conversion failed
                     helper._log_message(
                         "WARN",
                         filename,
@@ -366,9 +363,8 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     f"Failed to generate UI summary plot figure for {filename}: {e_ui_plot}",
                 )
                 traceback.print_exc()
-                if plot_fig:  # Ensure figure is closed on error
+                if plot_fig:  
                     plt.close(plot_fig)
-                # Add an error message to the UI for this file
                 ui_elements.append(
                     ui.div(
                         ui.hr() if i > 0 else None,
@@ -434,19 +430,17 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                             ui.hr(),
                         )
                     )
-        if not plots_found and results:  # If analysis ran but no plots generated
+        if not plots_found and results:
             return ui.tags.div(
-                # ui.h4("Debug Plots (Middle Sweep)"),
                 ui.help_text(
                     "Debug plots are enabled, but none were generated. This might happen if analysis failed early for all files, or if the middle sweep processing encountered an error."
                 )
             )
-        elif not results:  # No files loaded yet
+        elif not results:  
             return ui.tags.div(
-                # ui.h4("Debug Plots (Middle Sweep)"),
                 ui.help_text("Load ABF files to generate debug plots (if enabled).")
             )
-        else:  # Plots were found and added
+        else:  
             return ui.TagList(*ui_elements)
 
     @output
@@ -455,8 +449,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         """Renders the combined analysis DataFrame."""
         df = combined_analysis_df()
         if df.empty:
-            # Return an empty DataFrame structure to avoid errors if Shiny expects one
-            # You could potentially define expected columns here if known beforehand
             helper._log_message("DEBUG", "UI", None, "Rendering empty DataFrame.")
             return pd.DataFrame()
         return render.DataGrid(
@@ -465,11 +457,11 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
         helper._log_message("DEBUG", "UI", None, f"Rendering DataFrame with shape {df.shape}")
         return render.DataGrid(
-            df.round(4),  # Slightly more precision in table view
-            row_selection_mode="none",  # Disable row selection
+            df.round(4),  
+            row_selection_mode="none",
             width="100%",
             height="600px",
-            filters=True,  # Enable column filters
+            filters=True,  
         )
 
     @render.download(
@@ -481,7 +473,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         req(
             df_to_download is not None and not df_to_download.empty,
             cancel_output=ValueError("No analysis data available to download."),
-        )  # Provide user feedback
+        )  
         helper._log_message(
             "INFO",
             "Download",
@@ -521,7 +513,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             ]
             err_msg = f"Error: One or more index columns ({missing_cols}) not found in DataFrame for Excel export."
             helper._log_message("ERROR", "Download", None, err_msg)
-            # Raise error to potentially display in UI or logs, prevents download proceed
             raise ValueError(err_msg)
         dependent_vars = [
             col for col in df_before_pivot.columns if col not in index_cols
@@ -531,7 +522,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             helper._log_message("ERROR", "Download", None, err_msg)
             raise ValueError(err_msg)
 
-        # --- Create Excel file in memory ---
         output_buffer = io.BytesIO()
 
         try:
@@ -542,10 +532,8 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     helper._log_message(
                         "DEBUG", "Download", None, f"Processing sheet for: {var_name}"
                     )
-                    # Select necessary columns for this variable's pivot
                     df_subset = df_before_pivot[index_cols + [var_name]].copy()
 
-                    # Handle potential duplicate index entries before pivoting
                     if df_subset.duplicated(subset=index_cols).any():
                         num_duplicates = df_subset.duplicated(subset=index_cols).sum()
                         helper._log_message(
@@ -573,8 +561,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                             None,
                             f"Error pivoting data for variable '{var_name}': {e_pivot}",
                         )
-                        # Optionally write an error message to the sheet instead of failing?
-                        # For now, re-raise to indicate failure for this sheet/download
                         raise RuntimeError(
                             f"Failed to pivot data for {var_name}"
                         ) from e_pivot
@@ -582,7 +568,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     # Clean sheet name (max 31 chars, no invalid chars)
                     clean_sheet_name = (
                         str(var_name).replace("_", " ").title()
-                    )  # Nicer starting point
+                    ) 
                     clean_sheet_name = "".join(
                         c for c in clean_sheet_name if c.isalnum() or c in (" ", "-")
                     ).rstrip()
@@ -597,8 +583,8 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     )
 
             # --- Finalize and Yield ---
-            output_buffer.seek(0)  # Rewind buffer to the beginning
-            excel_data = output_buffer.getvalue()  # Get binary content
+            output_buffer.seek(0)
+            excel_data = output_buffer.getvalue()
             helper._log_message("INFO", "Download", None, "Excel file generated successfully.")
             yield excel_data
 
@@ -610,8 +596,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 f"Critical error during Excel generation: {e_excel}",
             )
             traceback.print_exc()
-            # Yield an error message string? Shiny download might handle exceptions directly.
-            # For robustness, could yield a simple error file content.
             yield f"Error generating Excel file: {e_excel}".encode("utf-8")
         finally:
             output_buffer.close()
@@ -649,18 +633,18 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 with PdfPages(pdf_buffer) as pdf:
                     # Iterate through the results, taking two files at a time for each page
                     for i in range(0, num_files, 2):
-                        fig_pdf_page = None  # Initialize figure for this page
+                        fig_pdf_page = None  
                         try:
                             # Create a figure with a 2x3 grid for two files
                             fig_pdf_page, axes = plt.subplots(
-                                2,  # Rows (one per file)
-                                3,  # Columns (raw, sc, phase)
+                                2,  
+                                3,  
                                 figsize=(A4_LANDSCAPE_WIDTH_IN, A4_LANDSCAPE_HEIGHT_IN),
-                                squeeze=False,  # Always return 2D array for axes
+                                squeeze=False,  
                             )
                             fig_pdf_page.set_layout_engine(
                                 "tight", pad=1.5
-                            )  # Good padding
+                            )  
 
                             # --- Process First File (Top Row) ---
                             result_data_1 = results[i]
@@ -671,7 +655,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                                 None,
                                 f"Processing File {i+1} for PDF (Top Row): {filename_1}",
                             )
-                            # Generate plots onto the top row axes (axes[0, 0], axes[0, 1], axes[0, 2])
+                            
                             plotting._generate_summary_plots_for_file(
                                 result_data_1,
                                 axes=axes[0, :],  # Pass the first row of axes
@@ -688,14 +672,12 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                                     None,
                                     f"Processing File {i+2} for PDF (Bottom Row): {filename_2}",
                                 )
-                                # Generate plots onto the bottom row axes (axes[1, 0], axes[1, 1], axes[1, 2])
                                 plotting._generate_summary_plots_for_file(
                                     result_data_2,
                                     axes=axes[1, :],  # Pass the second row of axes
                                     current_col=constants.CURRENT_COL_NAME,
                                 )
                             else:
-                                # If odd number of files, turn off axes for the empty second row
                                 helper._log_message(
                                     "DEBUG",
                                     "PDF Export",
@@ -705,11 +687,9 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                                 for ax_empty in axes[1, :]:
                                     ax_empty.axis("off")
 
-                            # Save the completed figure (page) to the PDF
                             pdf.savefig(fig_pdf_page)
 
                         except Exception as e_page:
-                            # Log error for this specific page, but continue if possible
                             helper._log_message(
                                 "ERROR",
                                 "PDF Export",
@@ -717,30 +697,10 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                                 f"Failed to create PDF page starting with file {i+1} ({results[i]['original_filename']}): {e_page}",
                             )
                             traceback.print_exc()
-                            # Optionally add an error page to the PDF?
-                            # fig_err, ax_err = plt.subplots(figsize=(6,4))
-                            # _plot_error_message(ax_err, f"Error generating PDF page for:\n{results[i]['original_filename']}\n{e_page}", "PDF Page Error")
-                            # pdf.savefig(fig_err)
-                            # plt.close(fig_err)
 
                         finally:
-                            # IMPORTANT: Close the figure associated with the page to free memory
                             if fig_pdf_page is not None:
                                 plt.close(fig_pdf_page)
-
-                    # --- Set PDF Metadata ---
-                    # Must be done *before* closing PdfPages context
-                    d = pdf.infodict()
-                    d["Title"] = f"ABF Analysis Summary Plots ({num_files} Files)"
-                    d["Author"] = "Spike Doctor Analysis App"
-                    # Set creation/modification date (UTC recommended for consistency)
-                    now_utc = pd.Timestamp.now(tz="UTC")
-                    d["CreationDate"] = now_utc
-                    d["ModDate"] = now_utc
-                    d["Keywords"] = "Electrophysiology ABF Analysis Summary"
-                    d["Subject"] = (
-                        f"Summary plots for {num_files} ABF files analyzed on {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}"
-                    )
 
                     pdf_page_count = pdf.get_pagecount()
 
@@ -758,7 +718,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             yield f"Error: Failed to generate PDF. Check logs. ({outer_e})".encode(
                 "utf-8"
             )
-            return  # Stop generation
+            return
 
         helper._log_message(
             "INFO",
@@ -780,6 +740,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
 
 # ==============================================================================
-# App Instantiation
+# Shiny App Start
 # ==============================================================================
 app = App(app_ui, server)

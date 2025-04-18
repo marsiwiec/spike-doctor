@@ -5,13 +5,11 @@ from typing import List
 # ==============================================================================
 
 # --- Analysis Settings ---
-# IMPORTANT: Set this index based on your experimental protocol's stimulus epoch.
+# IMPORTANT: Set this index based on your protocol's stimulus epoch.
 # This index refers to the epoch within abf.sweepEpochs that defines the main
 # stimulus start and end times used for eFEL and other calculations.
-# Check your ABF file's header in Clampfit or pyABF to determine the correct index.
-# Common indices: 0 (first epoch), 1, 2, etc.
+# Check your ABF header in Clampfit or pyABF to determine the correct index.
 
-# --- eFEL Specific Settings ---
 DEFAULT_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
@@ -22,7 +20,7 @@ DEFAULT_EFEL_FEATURES: List[str] = [
     "time_to_first_spike",
     "decay_time_constant_after_stim",
 ]
-# Features needed internally even if not selected by the user
+# Features needed internally even if not selected
 REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
@@ -31,5 +29,5 @@ REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
 ]
 
 # --- Plotting & Debugging ---
-MAX_RAW_PLOT_SWEEPS: int = 100  # Max sweeps to overlay on the raw trace plot
+MAX_RAW_PLOT_SWEEPS: int = 100  
 CURRENT_COL_NAME = "current_step_pA"
