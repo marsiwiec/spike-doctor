@@ -135,12 +135,11 @@ def run_analysis_on_abf(
             with warnings.catch_warnings(record=True) as caught_warnings:
                 warnings.simplefilter(
                     "always", RuntimeWarning
-                )  # Catch runtime warnings
+                )  
                 warnings.simplefilter(
                     "ignore", DeprecationWarning
-                )  # Ignore numpy/efel deprecations
+                )  
                 try:
-                    # Wrap eFEL call to catch potential exceptions more broadly
                     efel_results_list = efel.get_feature_values(
                         [trace_for_efel], all_efel_features_needed, raise_warnings=True
                     )
@@ -152,7 +151,7 @@ def run_analysis_on_abf(
                         )
 
                 except Exception as e:
-                    efel_error = e  # Store error to handle after warnings
+                    efel_error = e  
 
                 # Store relevant warnings (filter out known safe ones if needed)
                 efel_warnings = [
@@ -162,7 +161,6 @@ def run_analysis_on_abf(
                 ]
 
             if efel_error:
-                # Log error traceback for more details if possible
                 tb_str = traceback.format_exc()
                 helper._log_message(
                     "ERROR",
@@ -170,7 +168,6 @@ def run_analysis_on_abf(
                     sweep_num,
                     f"eFEL feature extraction failed: {efel_error}\nTraceback:\n{tb_str}",
                 )
-                # Set raw results to None so parsing yields NaNs
                 efel_results_raw = None
             if efel_warnings:
                 # Log only the first warning to avoid spamming console
@@ -210,12 +207,10 @@ def run_analysis_on_abf(
                 and np.isfinite(R_in_MOhm)
             ):
                 try:
-                    # Cm (pF) = Tau (ms) / Rin (MOhm) * 1000
                     Cm_manual_pF = (tau_efel_ms / R_in_MOhm) * 1000.0
                     if not np.isfinite(Cm_manual_pF):
                         Cm_manual_pF = np.nan
                 except (ZeroDivisionError, FloatingPointError) as div_err:
-                    # Should be caught by Rin>0 check, but handle defensively
                     helper._log_message(
                         "WARN",
                         abf_id_str,
@@ -268,10 +263,10 @@ def run_analysis_on_abf(
                 and sweep_num == middle_sweep_index_for_debug
                 and not debug_plot_generated
             ):
-                fig_debug = None  # Initialize figure variable
+                fig_debug = None  
                 try:
                     fig_debug, axs = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
-                    fig_debug.set_layout_engine("tight")  # Use tight layout
+                    fig_debug.set_layout_engine("tight")  
 
                     # --- Voltage Trace ---
                     axs[0].plot(
@@ -285,7 +280,7 @@ def run_analysis_on_abf(
                     axs[0].axvspan(
                         xmin = trace_for_efel["stim_start"][0] / 1000.0,
                         xmax = trace_for_efel["stim_end"][0] / 1000.0,
-                        color="salmon",  # Use a different color
+                        color="salmon",  
                         alpha=0.2,
                         zorder=-10,  # Place behind data
                     )
@@ -293,7 +288,7 @@ def run_analysis_on_abf(
                     if pd.notna(V_base_efel):
                         axs[0].axhline(
                             V_base_efel,
-                            color="darkorchid",  # Different color
+                            color="darkorchid",  
                             linestyle=":",
                             lw=1.5,
                             label=f"V_base (eFEL): {V_base_efel:.1f} mV",
@@ -312,7 +307,7 @@ def run_analysis_on_abf(
                         axs[1].plot(
                             abf.sweepX,
                             abf.sweepC * current_unit_factor,  # Plot in pA
-                            color="royalblue",  # Different blue
+                            color="royalblue",  
                             lw=0.7,
                         )
                     else:
@@ -338,7 +333,6 @@ def run_analysis_on_abf(
                     axs[1].set_ylabel(f"Current ({getattr(abf, 'sweepUnitsC', 'pA')})")
                     axs[1].set_xlabel("Time (s)")
 
-                    # fig_debug.tight_layout() # Use set_layout_engine instead
                     analysis_output["debug_plot_fig"] = fig_debug
                     debug_plot_generated = True  # Set flag
                     helper._log_message(
@@ -346,7 +340,6 @@ def run_analysis_on_abf(
                     )
 
                 except Exception as plot_err:
-                    # Log error but don't stop analysis
                     helper._log_message(
                         "ERROR",
                         abf_id_str,
@@ -354,10 +347,10 @@ def run_analysis_on_abf(
                         f"Debug plot generation failed: {plot_err}\n{traceback.format_exc()}",
                     )
                     analysis_output["debug_plot_fig"] = (
-                        None  # Ensure it's None on error
+                        None  
                     )
                     if fig_debug is not None:
-                        plt.close(fig_debug)  # Close figure if created but failed later
+                        plt.close(fig_debug)  
 
         # --- End of Sweep Loop ---
 
@@ -369,7 +362,7 @@ def run_analysis_on_abf(
             f"Critical error during sweep processing: {loop_err}",
         )
         traceback.print_exc()
-        # Return partial results if any were collected before the error
+        
         if sweep_results_list:
             helper._log_message(
                 "WARN",
@@ -378,9 +371,8 @@ def run_analysis_on_abf(
                 "Returning partial results due to error in loop.",
             )
         else:
-            # If loop failed early, ensure output df is None
             analysis_output["analysis_df"] = None
-            return analysis_output  # Return immediately, no further processing
+            return analysis_output  
 
     # 7. Final DataFrame Assembly
     if not sweep_results_list:
@@ -390,14 +382,12 @@ def run_analysis_on_abf(
             None,
             "Analysis finished, but no sweep results were generated.",
         )
-        # Return an empty DataFrame instead of None if analysis ran but yielded no rows
         analysis_output["analysis_df"] = pd.DataFrame()
         return analysis_output
 
     try:
         analysis_df = pd.DataFrame(sweep_results_list)
 
-        # Define standard columns (ensure current column name matches)
         standard_cols = [
             "filename",
             "sweep",
@@ -407,21 +397,17 @@ def run_analysis_on_abf(
             "capacitance_pF",
         ]
 
-        # Get list of eFEL features actually present in the results (requested by user)
         efel_cols_present = sorted(
             [f for f in user_selected_features if f in analysis_df.columns]
         )
 
-        # Combine and order columns: standard first, then selected eFEL features
         final_ordered_cols = standard_cols + efel_cols_present
-        # Ensure only existing columns are used for reindexing to avoid KeyErrors
         final_ordered_cols = [
             col for col in final_ordered_cols if col in analysis_df.columns
         ]
 
         analysis_df = analysis_df.reindex(columns=final_ordered_cols)
 
-        # Sort by filename and sweep number
         analysis_df = analysis_df.sort_values(by=["filename", "sweep"]).reset_index(
             drop=True
         )
@@ -438,7 +424,6 @@ def run_analysis_on_abf(
         helper._log_message(
             "ERROR", abf_id_str, None, f"Failed to assemble final DataFrame: {df_err}"
         )
-        # Set df to None if assembly fails
         analysis_output["analysis_df"] = None
 
     return analysis_output

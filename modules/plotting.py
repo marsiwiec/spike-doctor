@@ -22,7 +22,7 @@ def _plot_error_message(ax: plt.Axes, message: str, title: Optional[str] = None)
         ha="center",
         va="center",
         fontsize=9,
-        transform=ax.transAxes,  # Use axes coordinates
+        transform=ax.transAxes,
     )
     if title:
         ax.set_title(title, fontsize=9)
@@ -96,7 +96,7 @@ def plot_raw_traces(
 
     except Exception as e:
         helper._log_message("ERROR", filename, None, f"Raw trace plotting failed: {e}")
-        ax.cla()  # Clear axes before plotting error
+        ax.cla()
         _plot_error_message(ax, f"Plotting Error:\n{e}", f"Error: {filename}")
 
 
@@ -105,7 +105,7 @@ def plot_feature_vs_current(
     feature_name,
     current_col: str,
     filename: str,
-    abf: Optional[pyabf.ABF],  # Used for units
+    abf: Optional[pyabf.ABF],
     ax: plt.Axes,
 ) -> None:
     """Plots a specified feature against current onto given axes."""
@@ -123,7 +123,6 @@ def plot_feature_vs_current(
     elif current_col not in analysis_df.columns:
         error_message = f"Current col '{current_col}'\nnot found."
     else:
-        # Check for non-numeric types before dropping NA
         if not pd.api.types.is_numeric_dtype(
             analysis_df[current_col]
         ) or not pd.api.types.is_numeric_dtype(analysis_df[feature_name]):
@@ -219,7 +218,7 @@ def plot_phase_plane(
     if title_suffix:
         plot_title += f": {title_suffix}"
     else:
-        plot_title += f" ({file_sweep_info})"  # Add file/sweep if no error suffix
+        plot_title += f" ({file_sweep_info})"
 
     ax.set_title(plot_title, fontsize=9)
 
@@ -254,7 +253,6 @@ def plot_phase_plane(
             fontsize=9,
             transform=ax.transAxes,
         )
-        # Log only if it wasn't logged during data prep
         if "error" not in title_suffix.lower():
             helper._log_message(
                 "WARN",
@@ -302,7 +300,7 @@ def _prepare_phase_plot_data(
     target_current_pA: Optional[float] = None
     phase_v: Optional[np.ndarray] = None
     phase_dvdt: Optional[np.ndarray] = None
-    phase_title_suffix: str = "N/A"  # Default suffix
+    phase_title_suffix: str = "N/A"
 
     if not isinstance(abf_obj, pyabf.ABF):
         return None, None, None, None, "ABF Not Loaded"
@@ -320,7 +318,7 @@ def _prepare_phase_plot_data(
 
     try:
         # Find Rheobase (first sweep with >= 1 spike and positive current)
-        # Ensure we handle potential NaN/inf in current/spike_count gracefully
+        # Ensure we handle potential NaN/inf in current/spike_count
         spiking_sweeps = analysis_df[
             (analysis_df["spike_count"].fillna(0) >= 1)
             & (analysis_df[current_col].fillna(-np.inf) > 0)
@@ -375,10 +373,10 @@ def _prepare_phase_plot_data(
                         and len(phase_v) == len(time_s)
                     ):
                         # Calculate dV/dt (mV/ms)
-                        with warnings.catch_warnings():  # Suppress potential gradient warnings
+                        with warnings.catch_warnings():  
                             warnings.simplefilter("ignore")
                             phase_dvdt = np.gradient(phase_v, time_s * 1000.0)
-                        phase_title_suffix = ""  # Success! Clear the suffix
+                        phase_title_suffix = ""  
                     else:
                         phase_title_suffix = "Sweep Data Invalid"
                         helper._log_message(
@@ -419,10 +417,9 @@ def _prepare_phase_plot_data(
         helper._log_message(
             "ERROR",
             filename,
-            target_sweep_num,  # Might be None if error happened early
+            target_sweep_num,  
             f"Error calculating phase plot data: {e}",
         )
-        # Reset data in case of error
         phase_v, phase_dvdt, target_sweep_num, target_current_pA = (
             None,
             None,
@@ -459,7 +456,7 @@ def _generate_summary_plots_for_file(
     filename = result_data.get("original_filename", "Unknown Filename")
     abf_obj = result_data.get("abf_object")
     load_err = result_data.get("load_error")
-    analysis_df = result_data.get("analysis_df")  # Can be None or empty DataFrame
+    analysis_df = result_data.get("analysis_df")  
 
     raw_ax, sc_ax, phase_ax = axes
 
@@ -470,7 +467,7 @@ def _generate_summary_plots_for_file(
             filename,
             ax=raw_ax,
             load_error=load_err,
-            title_prefix="Raw",  # Shorter title for multi-plots
+            title_prefix="Raw",  
         )
     except Exception as e_plot:
         helper._log_message("ERROR", filename, None, f"Summary Raw Plot Error: {e_plot}")
@@ -480,7 +477,6 @@ def _generate_summary_plots_for_file(
 
     # 2. Spike Count vs Current Plot
     try:
-        # Handle case where analysis failed before calling plot function
         if load_err:
             _plot_error_message(
                 sc_ax, f"Load Error:\n{load_err}", "Spike Count vs Current"
@@ -495,7 +491,7 @@ def _generate_summary_plots_for_file(
                 "spike_count",
                 current_col,
                 filename,
-                abf_obj,  # Pass for units
+                abf_obj,  
                 ax=sc_ax,
             )
     except Exception as e_plot:
@@ -513,12 +509,10 @@ def _generate_summary_plots_for_file(
         "Prep Error",
     )
     try:
-        # Prepare data first (handles load errors, analysis failure internally)
         phase_v, phase_dvdt, target_sweep, target_current, suffix = (
             _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col)
         )
 
-        # Plot the phase plane using prepared data
         plot_phase_plane(
             phase_v,
             phase_dvdt,

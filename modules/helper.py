@@ -29,7 +29,7 @@ def fig_to_src(fig: Optional[plt.Figure]) -> Optional[str]:
             fig.savefig(buf, format="png", bbox_inches="tight")
             buf.seek(0)
             base64_str = base64.b64encode(buf.read()).decode("utf-8")
-        plt.close(fig)  # Close the figure to free memory
+        plt.close(fig)  
         return f"data:image/png;base64,{base64_str}"
     except Exception as e:
         _log_message("ERROR", "FigConv", None, f"Figure conversion failed: {e}")
