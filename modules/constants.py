@@ -4,12 +4,6 @@ from typing import List
 # Configuration Constants
 # ==============================================================================
 
-# --- Analysis Settings ---
-# IMPORTANT: Set this index based on your protocol's stimulus epoch.
-# This index refers to the epoch within abf.sweepEpochs that defines the main
-# stimulus start and end times used for eFEL and other calculations.
-# Check your ABF header in Clampfit or pyABF to determine the correct index.
-
 DEFAULT_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
@@ -18,13 +12,13 @@ DEFAULT_EFEL_FEATURES: List[str] = [
     "ohmic_input_resistance",
     "mean_frequency",
     "time_to_first_spike",
-    "decay_time_constant_after_stim",
+    "time_constant",
 ]
 # Features needed internally even if not selected
 REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
-    "decay_time_constant_after_stim",
+    "time_constant",
     "ohmic_input_resistance",
 ]
 

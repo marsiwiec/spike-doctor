@@ -187,7 +187,7 @@ def run_analysis_on_abf(
             # --- Manual Calculations (Cm) ---
 
             Cm_manual_pF = np.nan
-            tau_efel_ms = efel_results_parsed.get("decay_time_constant_after_stim", np.nan)
+            tau_efel_ms = efel_results_parsed.get("time_constant", np.nan)
             R_in_MOhm = efel_results_parsed.get("ohmic_input_resistance", np.nan)
 
             
@@ -205,6 +205,7 @@ def run_analysis_on_abf(
                 and R_in_MOhm > 0
                 and np.isfinite(tau_efel_ms)
                 and np.isfinite(R_in_MOhm)
+
             ):
                 try:
                     Cm_manual_pF = (tau_efel_ms / R_in_MOhm) * 1000.0
@@ -252,6 +253,10 @@ def run_analysis_on_abf(
                         sweep_data[feature] = np.nan
             if spike_count > 0:
                 sweep_data["capacitance_pF"] = np.nan
+            if stimulus_current_for_efel_nA >= 0:
+                sweep_data["time_constant"] = np.nan
+                sweep_data["capacitance_pF"] = np.nan
+                sweep_data["ohmic_input_resistance"] = np.nan
 
 
             sweep_results_list.append(sweep_data)
