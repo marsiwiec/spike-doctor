@@ -155,7 +155,7 @@ def plot_feature_vs_current(
         return
 
     y_label = feature_title
-    current_units = "pA"  # Default assumption based on constants.CURRENT_COL_NAME
+    current_units = "pA"  # Default assumption
     feature_units = ""
     if "resistance" in feature_name.lower():
         feature_units = "MΩ"
@@ -317,7 +317,7 @@ def _prepare_phase_plot_data(
         return None, None, None, None, "Non-numeric Data"
 
     try:
-        # Find Rheobase (first sweep with >= 1 spike and positive current)
+        # Find Rheobase
         # Ensure we handle potential NaN/inf in current/spike_count
         spiking_sweeps = analysis_df[
             (analysis_df["spike_count"].fillna(0) >= 1)
@@ -360,7 +360,7 @@ def _prepare_phase_plot_data(
                     f"Closest sweep to 2x rheo: {target_sweep_num} ({target_current_pA:.2f} pA)",
                 )
 
-                # Get data for the target sweep
+
                 try:
                     abf_obj.setSweep(target_sweep_num)
                     phase_v = abf_obj.sweepY

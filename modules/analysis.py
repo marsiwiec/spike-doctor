@@ -21,7 +21,7 @@ def run_analysis_on_abf(
     stimulus_epoch_index: int,
     detection_threshold: float,
     derivative_threshold: float,
-    debug_plot: bool = True,  # Renamed from CREATE_DEBUG_PLOTS for clarity
+    debug_plot: bool = True,
     current_col_name: str = constants.CURRENT_COL_NAME,
 ) -> Dict[str, Union[Optional[pd.DataFrame], Optional[plt.Figure]]]:
     """
@@ -56,22 +56,19 @@ def run_analysis_on_abf(
         return analysis_output
     abf_id_str = getattr(abf, "abfID", original_filename)
 
-    # 1. Initial Validation
     if not helper._validate_abf_for_analysis(abf, abf_id_str):
         return analysis_output
 
 
-    # 4. Determine Current Unit Conversion Factor (raw units -> pA)
     current_unit_factor = 1.0  # Assume pA by default
     current_unit_raw = getattr(abf, "sweepUnitsC", "").lower()
-    output_plot_unit = "pA"  # For debug plot label
+
     if "na" in current_unit_raw:
-        current_unit_factor = 1000.0  # nA to pA
+        current_unit_factor = 1000.0
         helper._log_message(
             "DEBUG", abf_id_str, None, "Detected nA command units. Factor = 1000."
         )
     elif not current_unit_raw or "pa" not in current_unit_raw:
-        output_plot_unit = f"{current_unit_raw or '?'} (Assumed pA)"
         helper._log_message(
             "WARN",
             abf_id_str,
@@ -79,7 +76,6 @@ def run_analysis_on_abf(
             f"Command units are '{current_unit_raw}'. Assuming pA.",
         )
 
-    # Prepare eFEL
     all_efel_features_needed = list(
         set(user_selected_features) | set(constants.REQUIRED_INTERNAL_EFEL_FEATURES)
     )
@@ -103,10 +99,9 @@ def run_analysis_on_abf(
         )
         return analysis_output
 
-    # Sweep Loop and Analysis
     sweep_results_list = []
     debug_plot_generated = False  # Flag to ensure only one debug plot per file
-    # Choose a sweep for debug plot: prefer middle, but ensure it's a valid index
+    # Choose a sweep for debug plot: prefer middle, but ensure valid index
     middle_sweep_idx_in_list = abf.sweepCount // 2
     middle_sweep_index_for_debug = (
         abf.sweepList[middle_sweep_idx_in_list] if abf.sweepList else 0
@@ -128,7 +123,7 @@ def run_analysis_on_abf(
                 "stimulus_current": [float(stimulus_current_for_efel_nA) * current_unit_factor],
             }
 
-            # --- Run eFEL ---
+
             efel_results_raw = None
             efel_error = None
             efel_warnings = []
@@ -178,7 +173,7 @@ def run_analysis_on_abf(
                     "WARN", abf_id_str, sweep_num, f"eFEL warnings: {summary_warning}"
                 )
 
-            # --- Parse eFEL Results Safely ---
+
             efel_results_parsed = {
                 feat: helper.parse_efel_value(efel_results_raw, feat)
                 for feat in all_efel_features_needed
@@ -243,11 +238,9 @@ def run_analysis_on_abf(
             # --- Sanitize results based on spike count ---
             if spike_count <= 1:
                 for feature in sweep_data:
-                    # Invalidate freq/ISI features if 0 or 1 spike
                     if "frequency" in feature.lower() or "isi" in feature.lower():
                         sweep_data[feature] = np.nan
             if spike_count == 0:
-                # Invalidate time_to features if no spikes
                 for feature in sweep_data:
                     if "time_to_" in feature.lower() or "latency" in feature.lower():
                         sweep_data[feature] = np.nan
@@ -357,7 +350,6 @@ def run_analysis_on_abf(
                     if fig_debug is not None:
                         plt.close(fig_debug)  
 
-        # --- End of Sweep Loop ---
 
     except Exception as loop_err:
         helper._log_message(
@@ -379,7 +371,6 @@ def run_analysis_on_abf(
             analysis_output["analysis_df"] = None
             return analysis_output  
 
-    # 7. Final DataFrame Assembly
     if not sweep_results_list:
         helper._log_message(
             "WARN",
