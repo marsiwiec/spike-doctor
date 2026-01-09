@@ -65,9 +65,6 @@ def run_analysis_on_abf(
 
     if "na" in current_unit_raw:
         current_unit_factor = 1000.0
-        helper._log_message(
-            "DEBUG", abf_id_str, None, "Detected nA command units. Factor = 1000."
-        )
     elif not current_unit_raw or "pa" not in current_unit_raw:
         helper._log_message(
             "WARN",
@@ -84,12 +81,6 @@ def run_analysis_on_abf(
         efel.api.set_setting("strict_stiminterval", True)
         efel.api.set_setting("Threshold", detection_threshold)
         efel.api.set_setting("DerivativeThreshold", derivative_threshold)
-        helper._log_message(
-            "DEBUG",
-            abf_id_str,
-            None,
-            f"Configured eFEL. Requesting {len(all_efel_features_needed)} features.",
-        )
     except Exception as e:
         helper._log_message(
             "ERROR",
@@ -195,32 +186,12 @@ def run_analysis_on_abf(
             # Calculate Cm only if Tau and Rin are valid and positive
             if (
                 pd.notna(tau_efel_ms)
-                and tau_efel_ms > 0
                 and pd.notna(R_in_MOhm)
+                and tau_efel_ms > 0
                 and R_in_MOhm > 0
-                and np.isfinite(tau_efel_ms)
-                and np.isfinite(R_in_MOhm)
-
             ):
-                try:
-                    Cm_manual_pF = (tau_efel_ms / R_in_MOhm) * 1000.0
-                    if not np.isfinite(Cm_manual_pF):
-                        Cm_manual_pF = np.nan
-                except (ZeroDivisionError, FloatingPointError) as div_err:
-                    helper._log_message(
-                        "WARN",
-                        abf_id_str,
-                        sweep_num,
-                        f"Division error during Cm calc: {div_err}",
-                    )
-                    Cm_manual_pF = np.nan
-                except Exception as cm_err:
-                    helper._log_message(
-                        "WARN",
-                        abf_id_str,
-                        sweep_num,
-                        f"Manual Cm calculation failed: {cm_err}",
-                    )
+                Cm_manual_pF = (tau_efel_ms / R_in_MOhm) * 1000.0
+                if not np.isfinite(Cm_manual_pF):
                     Cm_manual_pF = np.nan
 
             # --- Assemble Sweep Results ---
@@ -332,10 +303,7 @@ def run_analysis_on_abf(
                     axs[1].set_xlabel("Time (s)")
 
                     analysis_output["debug_plot_fig"] = fig_debug
-                    debug_plot_generated = True  # Set flag
-                    helper._log_message(
-                        "DEBUG", abf_id_str, sweep_num, "Debug plot generated."
-                    )
+                    debug_plot_generated = True
 
                 except Exception as plot_err:
                     helper._log_message(
@@ -384,37 +352,16 @@ def run_analysis_on_abf(
     try:
         analysis_df = pd.DataFrame(sweep_results_list)
 
-        standard_cols = [
-            "filename",
-            "sweep",
-            current_col_name,
-            "input_resistance_Mohm",
-            "time_constant_ms",
-            "capacitance_pF",
-        ]
+        # Order columns: metadata first, then capacitance, then user-selected eFEL features
+        priority_cols = ["filename", "sweep", current_col_name, "capacitance_pF"]
+        efel_cols = sorted([c for c in analysis_df.columns if c not in priority_cols])
+        ordered_cols = [c for c in priority_cols if c in analysis_df.columns] + efel_cols
 
-        efel_cols_present = sorted(
-            [f for f in user_selected_features if f in analysis_df.columns]
-        )
-
-        final_ordered_cols = standard_cols + efel_cols_present
-        final_ordered_cols = [
-            col for col in final_ordered_cols if col in analysis_df.columns
-        ]
-
-        analysis_df = analysis_df.reindex(columns=final_ordered_cols)
-
-        analysis_df = analysis_df.sort_values(by=["filename", "sweep"]).reset_index(
-            drop=True
-        )
+        analysis_df = analysis_df[ordered_cols].sort_values(
+            by=["filename", "sweep"]
+        ).reset_index(drop=True)
 
         analysis_output["analysis_df"] = analysis_df
-        helper._log_message(
-            "DEBUG",
-            abf_id_str,
-            None,
-            f"Analysis complete. DataFrame shape: {analysis_df.shape}",
-        )
 
     except Exception as df_err:
         helper._log_message(

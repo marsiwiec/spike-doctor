@@ -116,7 +116,7 @@ def plot_feature_vs_current(
     error_message = None
     plot_data = pd.DataFrame()
 
-    if not isinstance(analysis_df, pd.DataFrame) or analysis_df.empty:
+    if not helper.is_valid_analysis_df(analysis_df):
         error_message = "No analysis data."
     elif feature_name not in analysis_df.columns:
         error_message = f"Feature '{feature_name}'\nnot found."
@@ -155,26 +155,11 @@ def plot_feature_vs_current(
         return
 
     y_label = feature_title
-    current_units = "pA"  # Default assumption
-    feature_units = ""
-    if "resistance" in feature_name.lower():
-        feature_units = "MΩ"
-    elif "constant" in feature_name.lower():
-        feature_units = "ms"
-    elif "capacitance" in feature_name.lower():
-        feature_units = "pF"
-    elif "frequency" in feature_name.lower() or "isi" in feature_name.lower():
-        feature_units = "Hz"
-    elif "time_to_" in feature_name.lower() or "latency" in feature_name.lower():
-        feature_units = "ms"
-    elif "voltage" in feature_name.lower() or "potential" in feature_name.lower():
-        feature_units = getattr(abf, "sweepUnitsY", "mV") if abf else "mV"
+    feature_units = helper.get_feature_units(feature_name, abf)
     if feature_units:
         y_label += f" ({feature_units})"
 
-    current_label = current_col.replace("_", " ").title()
-
-    current_label += f" ({current_units})"
+    current_label = f"{current_col.replace('_', ' ').title()} (pA)"
 
     try:
         ax.plot(
@@ -296,138 +281,62 @@ def _prepare_phase_plot_data(
         Tuple: (voltage_mV, dvdt_mV_ms, target_sweep_num, target_current_pA, status_suffix)
                Returns (None, None, None, None, error_message) on failure.
     """
-    target_sweep_num: Optional[int] = None
-    target_current_pA: Optional[float] = None
-    phase_v: Optional[np.ndarray] = None
-    phase_dvdt: Optional[np.ndarray] = None
-    phase_title_suffix: str = "N/A"
-
     if not isinstance(abf_obj, pyabf.ABF):
         return None, None, None, None, "ABF Not Loaded"
-    if not isinstance(analysis_df, pd.DataFrame) or analysis_df.empty:
+    if not helper.is_valid_analysis_df(analysis_df):
         return None, None, None, None, "Analysis Failed"
-    if (
-        current_col not in analysis_df.columns
-        or "spike_count" not in analysis_df.columns
-    ):
+    if current_col not in analysis_df.columns or "spike_count" not in analysis_df.columns:
         return None, None, None, None, "Required Columns Missing"
-    if not pd.api.types.is_numeric_dtype(
-        analysis_df[current_col]
-    ) or not pd.api.types.is_numeric_dtype(analysis_df["spike_count"]):
+    if not pd.api.types.is_numeric_dtype(analysis_df[current_col]) or not pd.api.types.is_numeric_dtype(analysis_df["spike_count"]):
         return None, None, None, None, "Non-numeric Data"
 
+    # Find spiking sweeps with positive current
+    spiking_sweeps = analysis_df[
+        (analysis_df["spike_count"].fillna(0) >= 1)
+        & (analysis_df[current_col].fillna(-np.inf) > 0)
+        & np.isfinite(analysis_df[current_col])
+    ]
+    if spiking_sweeps.empty:
+        return None, None, None, None, "Rheobase Not Found"
+
+    # Calculate 2x rheobase current
+    rheobase_current = spiking_sweeps[current_col].min()
+    target_current = 2 * rheobase_current
+
+    # Find sweep closest to 2x rheobase
+    valid_current_df = analysis_df.dropna(subset=[current_col])
+    valid_current_df = valid_current_df[np.isfinite(valid_current_df[current_col])]
+    if valid_current_df.empty:
+        return None, None, None, None, "No Valid Current Data"
+
+    closest_idx = (valid_current_df[current_col] - target_current).abs().idxmin()
+    closest_sweep_row = valid_current_df.loc[closest_idx]
+    if "sweep" not in closest_sweep_row:
+        return None, None, None, None, "Sweep Column Missing"
+
+    target_sweep_num = int(closest_sweep_row["sweep"])
+    target_current_pA = closest_sweep_row[current_col]
+
+    # Extract voltage and calculate dV/dt
     try:
-        # Find Rheobase
-        # Ensure we handle potential NaN/inf in current/spike_count
-        spiking_sweeps = analysis_df[
-            (analysis_df["spike_count"].fillna(0) >= 1)
-            & (analysis_df[current_col].fillna(-np.inf) > 0)
-            & np.isfinite(analysis_df[current_col])
-        ]
+        abf_obj.setSweep(target_sweep_num)
+        phase_v = abf_obj.sweepY
+        time_s = abf_obj.sweepX
 
-        if not spiking_sweeps.empty:
-            rheobase_row = spiking_sweeps.loc[spiking_sweeps[current_col].idxmin()]
-            rheobase_current = rheobase_row[current_col]
-            target_current = 2 * rheobase_current
-            helper._log_message(
-                "DEBUG",
-                filename,
-                None,
-                f"Rheobase found: {rheobase_current:.2f} pA. Target 2x: {target_current:.2f} pA",
-            )
+        if not (isinstance(phase_v, np.ndarray) and isinstance(time_s, np.ndarray)
+                and len(phase_v) > 1 and len(time_s) > 1 and len(phase_v) == len(time_s)):
+            return phase_v, None, target_sweep_num, target_current_pA, "Sweep Data Invalid"
 
-            # Find sweep closest to 2x rheobase
-            # Ensure we only consider sweeps with valid finite current values
-            valid_current_df = analysis_df.dropna(subset=[current_col])
-            valid_current_df = valid_current_df[
-                np.isfinite(valid_current_df[current_col])
-            ]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            phase_dvdt = np.gradient(phase_v, time_s * 1000.0)
 
-            if not valid_current_df.empty:
-                closest_idx = (
-                    (valid_current_df[current_col] - target_current).abs().idxmin()
-                )
-                closest_sweep_row = valid_current_df.loc[closest_idx]
-                if "sweep" not in closest_sweep_row:
-                    return None, None, None, None, "Sweep Column Missing"
+        return phase_v, phase_dvdt, target_sweep_num, target_current_pA, ""
 
-                target_sweep_num = int(closest_sweep_row["sweep"])
-                target_current_pA = closest_sweep_row[current_col]
-                helper._log_message(
-                    "DEBUG",
-                    filename,
-                    None,
-                    f"Closest sweep to 2x rheo: {target_sweep_num} ({target_current_pA:.2f} pA)",
-                )
-
-
-                try:
-                    abf_obj.setSweep(target_sweep_num)
-                    phase_v = abf_obj.sweepY
-                    time_s = abf_obj.sweepX
-                    if (
-                        isinstance(phase_v, np.ndarray)
-                        and len(phase_v) > 1
-                        and isinstance(time_s, np.ndarray)
-                        and len(time_s) > 1
-                        and len(phase_v) == len(time_s)
-                    ):
-                        # Calculate dV/dt (mV/ms)
-                        with warnings.catch_warnings():  
-                            warnings.simplefilter("ignore")
-                            phase_dvdt = np.gradient(phase_v, time_s * 1000.0)
-                        phase_title_suffix = ""  
-                    else:
-                        phase_title_suffix = "Sweep Data Invalid"
-                        helper._log_message(
-                            "WARN",
-                            filename,
-                            target_sweep_num,
-                            "Invalid V/T data for phase plot gradient.",
-                        )
-                except IndexError:
-                    phase_title_suffix = f"Sweep Index Error: {target_sweep_num}"
-                    helper._log_message("ERROR", filename, None, phase_title_suffix)
-                except Exception as e_sweep:
-                    phase_title_suffix = f"Sweep Load Error: {e_sweep}"
-                    helper._log_message(
-                        "ERROR", filename, target_sweep_num, phase_title_suffix
-                    )
-
-            else:
-                phase_title_suffix = "No Valid Current Data"
-                helper._log_message(
-                    "WARN",
-                    filename,
-                    None,
-                    "No sweeps with valid current found for phase plot.",
-                )
-
-        else:
-            phase_title_suffix = "Rheobase Not Found"
-            helper._log_message(
-                "WARN",
-                filename,
-                None,
-                "Rheobase not found (no spiking sweeps with positive current).",
-            )
-
+    except IndexError:
+        return None, None, target_sweep_num, target_current_pA, f"Sweep Index Error: {target_sweep_num}"
     except Exception as e:
-        phase_title_suffix = f"Phase Calc Error: {e}"
-        helper._log_message(
-            "ERROR",
-            filename,
-            target_sweep_num,  
-            f"Error calculating phase plot data: {e}",
-        )
-        phase_v, phase_dvdt, target_sweep_num, target_current_pA = (
-            None,
-            None,
-            None,
-            None,
-        )
-
-    return phase_v, phase_dvdt, target_sweep_num, target_current_pA, phase_title_suffix
+        return None, None, target_sweep_num, target_current_pA, f"Sweep Load Error: {e}"
 
 
 def _generate_summary_plots_for_file(
@@ -481,7 +390,7 @@ def _generate_summary_plots_for_file(
             _plot_error_message(
                 sc_ax, f"Load Error:\n{load_err}", "Spike Count vs Current"
             )
-        elif not isinstance(analysis_df, pd.DataFrame) or analysis_df.empty:
+        elif not helper.is_valid_analysis_df(analysis_df):
             _plot_error_message(
                 sc_ax, "Analysis skipped\nor failed.", "Spike Count vs Current"
             )
@@ -501,18 +410,10 @@ def _generate_summary_plots_for_file(
         )
 
     # 3. Phase Plane Plot
-    phase_v, phase_dvdt, target_sweep, target_current, suffix = (
-        None,
-        None,
-        None,
-        None,
-        "Prep Error",
-    )
     try:
         phase_v, phase_dvdt, target_sweep, target_current, suffix = (
             _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col)
         )
-
         plot_phase_plane(
             phase_v,
             phase_dvdt,
@@ -523,7 +424,5 @@ def _generate_summary_plots_for_file(
             ax=phase_ax,
         )
     except Exception as e_plot:
-        helper._log_message(
-            "ERROR", filename, target_sweep, f"Summary Phase Plot Error: {e_plot}"
-        )
+        helper._log_message("ERROR", filename, None, f"Summary Phase Plot Error: {e_plot}")
         _plot_error_message(phase_ax, f"Phase Plot Error:\n{e_plot}", "Phase Plane")
