@@ -81,9 +81,9 @@ def run_analysis_on_abf(
     )
     try:
         efel.reset()
-        efel.set_setting("strict_stiminterval", True)
-        efel.set_setting("Threshold", detection_threshold)
-        efel.set_setting("DerivativeThreshold", derivative_threshold)
+        efel.api.set_setting("strict_stiminterval", True)
+        efel.api.set_setting("Threshold", detection_threshold)
+        efel.api.set_setting("DerivativeThreshold", derivative_threshold)
         helper._log_message(
             "DEBUG",
             abf_id_str,

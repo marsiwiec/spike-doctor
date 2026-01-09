@@ -15,7 +15,7 @@ from modules import analysis, constants, helper, plotting
 
 
 try:
-    AVAILABLE_EFEL_FEATURES = sorted(efel.get_feature_names())
+    AVAILABLE_EFEL_FEATURES = sorted(efel.getFeatureNames())
 except Exception as e:
     print(f"Warning: Could not dynamically get eFEL features: {e}. Using defaults.")
     AVAILABLE_EFEL_FEATURES = sorted(
