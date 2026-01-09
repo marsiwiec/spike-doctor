@@ -7,9 +7,6 @@
 }:
 
 {
-  # https://devenv.sh/basics/
-  env.GREET = "devenv";
-
   # https://devenv.sh/packages/
   packages = with pkgs; [
     black
@@ -25,13 +22,4 @@
       requirements = ./requirements.txt;
     };
   };
-
-  # https://devenv.sh/scripts/
-  scripts.hello.exec = ''
-    echo hello from $GREET
-  '';
-
-  enterShell = ''
-    hello
-  '';
 }

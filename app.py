@@ -2,7 +2,6 @@ import io
 import traceback
 import warnings
 from pathlib import Path
-from io import BytesIO
 import shiny
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -22,9 +21,29 @@ except Exception as e:
         constants.DEFAULT_EFEL_FEATURES + constants.REQUIRED_INTERNAL_EFEL_FEATURES
     )
 
-VALID_DEFAULT_FEATURES = [
-    f for f in constants.DEFAULT_EFEL_FEATURES if f in AVAILABLE_EFEL_FEATURES
-]
+# Advanced features = all features except basic ones
+ADVANCED_EFEL_FEATURES = sorted([
+    f for f in AVAILABLE_EFEL_FEATURES if f not in constants.BASIC_EFEL_FEATURES
+])
+
+
+def _create_basic_feature_checkboxes():
+    """Create checkbox inputs with tooltips for basic features."""
+    elements = []
+    for feature_id, (display_name, description) in constants.BASIC_EFEL_FEATURES.items():
+        if feature_id in AVAILABLE_EFEL_FEATURES:
+            elements.append(
+                ui.tooltip(
+                    ui.input_checkbox(
+                        f"basic_feature_{feature_id}",
+                        display_name,
+                        value=True,
+                    ),
+                    description,
+                    placement="right",
+                )
+            )
+    return elements
 
 app_ui = ui.page_fluid(
     ui.tags.head(ui.tags.title("Spike Doctor")),
@@ -69,11 +88,27 @@ app_ui = ui.page_fluid(
                 True,
             ),
             ui.h5("eFEL Features to Calculate:"),
-            ui.input_checkbox_group(
-                "selected_efel_features",
-                label=None,
-                choices=AVAILABLE_EFEL_FEATURES,
-                selected=VALID_DEFAULT_FEATURES,
+            ui.navset_pill(
+                ui.nav_panel(
+                    "Basic",
+                    ui.div(
+                        *_create_basic_feature_checkboxes(),
+                        style="margin-top: 10px;",
+                    ),
+                ),
+                ui.nav_panel(
+                    "Advanced",
+                    ui.div(
+                        ui.input_checkbox_group(
+                            "advanced_efel_features",
+                            label="Additional eFEL features:",
+                            choices=ADVANCED_EFEL_FEATURES,
+                            selected=[],
+                        ),
+                        style="margin-top: 10px; max-height: 300px; overflow-y: auto;",
+                    ),
+                ),
+                id="feature_tabs",
             ),
             width=380,
         ),
@@ -108,6 +143,21 @@ app_ui = ui.page_fluid(
 def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
     loaded_abf_data = reactive.Value([])
+
+    @reactive.Calc
+    def selected_efel_features() -> list:
+        """Combine basic and advanced feature selections."""
+        features = []
+        # Collect basic features (individual checkboxes)
+        for feature_id in constants.BASIC_EFEL_FEATURES.keys():
+            if feature_id in AVAILABLE_EFEL_FEATURES:
+                checkbox_value = getattr(input, f"basic_feature_{feature_id}")()
+                if checkbox_value:
+                    features.append(feature_id)
+        # Add advanced features (checkbox group)
+        advanced = input.advanced_efel_features() or []
+        features.extend(advanced)
+        return features
 
     @reactive.Effect
     @reactive.event(input.abf_files)
@@ -168,7 +218,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 **analysis.run_analysis_on_abf(
                     abf=file_data.get("abf_object"),
                     original_filename=file_data.get("original_filename"),
-                    user_selected_features=input.selected_efel_features(),
+                    user_selected_features=selected_efel_features(),
                     stimulus_epoch_index=input.stimulus_epoch_index(),
                     detection_threshold=input.detection_threshold(),
                     derivative_threshold=input.derivative_threshold(),
@@ -186,19 +236,11 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         Combines analysis results from individual files into a single DataFrame.
         Returns an empty DataFrame if no valid results exist or on error.
         """
-        results_list = analysis_results_list()  
-        helper._log_message(
-            "DEBUG",
-            "App",
-            None,
-            f"Attempting to combine results from {len(results_list)} files.",
-        )
-
+        results_list = analysis_results_list()
         valid_dfs = [
             r.get("analysis_df")
             for r in results_list
-            if isinstance(r.get("analysis_df"), pd.DataFrame)
-            and not r["analysis_df"].empty
+            if helper.is_valid_analysis_df(r.get("analysis_df"))
         ]
 
         if not valid_dfs:
@@ -207,11 +249,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             )
             return pd.DataFrame()
         try:
-            combined_df = pd.concat(valid_dfs, ignore_index=True, sort=False)
-            helper._log_message(
-                "DEBUG", "App", None, f"Combined DataFrame shape: {combined_df.shape}"
-            )
-            return combined_df
+            return pd.concat(valid_dfs, ignore_index=True, sort=False)
         except Exception as e:
             helper._log_message("ERROR", "App", None, f"Failed to concatenate DataFrames: {e}")
             traceback.print_exc()
@@ -231,10 +269,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         )
         num_load_err = sum(1 for r in results if r.get("load_error"))
         num_analyzed_ok = sum(
-            1
-            for r in results
-            if isinstance(r.get("analysis_df"), pd.DataFrame)
-            and not r["analysis_df"].empty
+            1 for r in results if helper.is_valid_analysis_df(r.get("analysis_df"))
         )
         num_analysis_failed = num_total - num_analyzed_ok - num_load_err
 
@@ -251,7 +286,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             f"Spike V Threshold: {input.detection_threshold()} mV\n"
             f"Spike dV/dt Threshold: {input.derivative_threshold()} mV/ms\n"
             f"Debug Plots Enabled: {'Yes' if input.debug_plots() else 'No'}\n"
-            f"# eFEL Features Selected: {len(input.selected_efel_features())}\n"
+            f"# eFEL Features Selected: {len(selected_efel_features())}\n"
             f"---\n"
         )
 
@@ -265,12 +300,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
             summary += "\n---\n"
 
         first_analyzed_data = next(
-            (
-                r
-                for r in results
-                if isinstance(r.get("analysis_df"), pd.DataFrame)
-                and not r["analysis_df"].empty
-            ),
+            (r for r in results if helper.is_valid_analysis_df(r.get("analysis_df"))),
             None,
         )
         if first_analyzed_data:
@@ -297,13 +327,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         req(results)
 
         ui_elements = []
-        if not results:
-            return ui.p("No files loaded or analyzed yet.")
-
-        helper._log_message(
-            "DEBUG", "UI", None, f"Generating summary plot UI for {len(results)} files."
-        )
-
         for i, result_data in enumerate(results):
             filename = result_data.get("original_filename", f"File {i+1}")
             plot_fig = None
@@ -371,11 +394,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                     )
                 )
 
-        return (
-            ui.TagList(*ui_elements)
-            if ui_elements
-            else ui.p("Processing files or no plots generated.")
-        )
+        return ui.TagList(*ui_elements) if ui_elements else ui.p("No plots generated.")
 
     @output
     @render.ui
@@ -388,6 +407,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         req(results)
 
         ui_elements = []
+        plots_found = False
         for result_data in results:
             filename = result_data["original_filename"]
             debug_fig = result_data.get("debug_plot_fig")
@@ -426,18 +446,11 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                             ui.hr(),
                         )
                     )
-        if not plots_found and results:
-            return ui.tags.div(
-                ui.help_text(
-                    "Debug plots are enabled, but none were generated. This might happen if analysis failed early for all files, or if the middle sweep processing encountered an error."
-                )
+        if not plots_found:
+            return ui.help_text(
+                "Debug plots are enabled, but none were generated. This might happen if analysis failed early for all files, or if the middle sweep processing encountered an error."
             )
-        elif not results:  
-            return ui.tags.div(
-                ui.help_text("Load ABF files to generate debug plots (if enabled).")
-            )
-        else:  
-            return ui.TagList(*ui_elements)
+        return ui.TagList(*ui_elements)
 
     @output
     @render.data_frame
@@ -445,19 +458,9 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         """Renders the combined analysis DataFrame."""
         df = combined_analysis_df()
         if df.empty:
-            helper._log_message("DEBUG", "UI", None, "Rendering empty DataFrame.")
             return pd.DataFrame()
         return render.DataGrid(
             df.round(3), selection_mode="none", width="100%", height="600px"
-        )
-
-        helper._log_message("DEBUG", "UI", None, f"Rendering DataFrame with shape {df.shape}")
-        return render.DataGrid(
-            df.round(4),  
-            row_selection_mode="none",
-            width="100%",
-            height="600px",
-            filters=True,  
         )
 
     @render.download(
@@ -522,12 +525,8 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
         try:
 
-            # Use ExcelWriter to manage writing multiple sheets to the buffer
             with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
                 for var_name in dependent_vars:
-                    helper._log_message(
-                        "DEBUG", "Download", None, f"Processing sheet for: {var_name}"
-                    )
                     df_subset = df_before_pivot[index_cols + [var_name]].copy()
 
                     if df_subset.duplicated(subset=index_cols).any():
@@ -561,18 +560,9 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                             f"Failed to pivot data for {var_name}"
                         ) from e_pivot
 
-                    # Clean sheet name (max 31 chars, no invalid chars)
-                    clean_sheet_name = (
-                        str(var_name).replace("_", " ").title()
-                    ) 
-                    clean_sheet_name = "".join(
-                        c for c in clean_sheet_name if c.isalnum() or c in (" ", "-")
-                    ).rstrip()
-                    clean_sheet_name = clean_sheet_name[:31]
-
                     df_pivot.to_excel(
                         writer,
-                        sheet_name=clean_sheet_name,
+                        sheet_name=helper.clean_excel_sheet_name(var_name),
                         index=True,
                         float_format="%.6g",
                         na_rep="NaN",
@@ -624,7 +614,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         A4_LANDSCAPE_HEIGHT_IN = 8.27
 
         try:
-            with BytesIO() as pdf_buffer:
+            with io.BytesIO() as pdf_buffer:
                 # Create a PdfPages object to write multiple pages to the buffer
                 with PdfPages(pdf_buffer) as pdf:
                     # Iterate through the results, taking two files at a time for each page
@@ -644,14 +634,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
                             # --- Process First File (Top Row) ---
                             result_data_1 = results[i]
-                            filename_1 = result_data_1["original_filename"]
-                            helper._log_message(
-                                "DEBUG",
-                                "PDF Export",
-                                None,
-                                f"Processing File {i+1} for PDF (Top Row): {filename_1}",
-                            )
-                            
                             plotting._generate_summary_plots_for_file(
                                 result_data_1,
                                 axes=axes[0, :],  # Pass the first row of axes
@@ -660,26 +642,12 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
                             # --- Process Second File (Bottom Row) if it exists ---
                             if i + 1 < num_files:
-                                result_data_2 = results[i + 1]
-                                filename_2 = result_data_2["original_filename"]
-                                helper._log_message(
-                                    "DEBUG",
-                                    "PDF Export",
-                                    None,
-                                    f"Processing File {i+2} for PDF (Bottom Row): {filename_2}",
-                                )
                                 plotting._generate_summary_plots_for_file(
-                                    result_data_2,
+                                    results[i + 1],
                                     axes=axes[1, :],  # Pass the second row of axes
                                     current_col=constants.CURRENT_COL_NAME,
                                 )
                             else:
-                                helper._log_message(
-                                    "DEBUG",
-                                    "PDF Export",
-                                    None,
-                                    f"Odd number of files. Page {pdf.get_pagecount()+1} has only one file.",
-                                )
                                 for ax_empty in axes[1, :]:
                                     ax_empty.axis("off")
 

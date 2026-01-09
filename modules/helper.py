@@ -126,6 +126,36 @@ def parse_efel_value(
         return np.nan
 
 
+def is_valid_analysis_df(df: Any) -> bool:
+    """Check if an analysis DataFrame is valid and non-empty."""
+    return isinstance(df, pd.DataFrame) and not df.empty
+
+
+def get_feature_units(feature_name: str, abf: Any = None) -> str:
+    """Get the units for a given eFEL feature name."""
+    name_lower = feature_name.lower()
+    if "resistance" in name_lower:
+        return "MΩ"
+    if "constant" in name_lower:
+        return "ms"
+    if "capacitance" in name_lower:
+        return "pF"
+    if "frequency" in name_lower or "isi" in name_lower:
+        return "Hz"
+    if "time_to_" in name_lower or "latency" in name_lower:
+        return "ms"
+    if "voltage" in name_lower or "potential" in name_lower:
+        return getattr(abf, "sweepUnitsY", "mV") if abf else "mV"
+    return ""
+
+
+def clean_excel_sheet_name(name: str) -> str:
+    """Clean a string to be a valid Excel sheet name (max 31 chars, alphanumeric)."""
+    clean_name = str(name).replace("_", " ").title()
+    clean_name = "".join(c for c in clean_name if c.isalnum() or c in (" ", "-")).rstrip()
+    return clean_name[:31]
+
+
 def _validate_abf_for_analysis(abf: pyabf.ABF, abf_id_str: str) -> bool:
     """Performs initial checks on the ABF object properties."""
     if not hasattr(abf, "sweepCount") or abf.sweepCount <= 0:
