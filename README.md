@@ -22,7 +22,7 @@ The repository includes a [devenv](https://devenv.sh/) configuration that automa
 ```bash
 git clone https://github.com/marsiwiec/spike-doctor.git
 cd spike-doctor
-# If you have devenv installed, the environment activates automatically via direnv
+# If you have devenv installed, the environment activates automatically via direnv after you run `direnv allow`
 ```
 
 ### Manual Installation
