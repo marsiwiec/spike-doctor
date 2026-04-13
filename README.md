@@ -123,16 +123,6 @@ Currently supports:
 - [numpy](https://numpy.org/) - Numerical computing
 - [openpyxl](https://openpyxl.readthedocs.io/) - Excel file writing
 
-## Development
-
-```bash
-# Type checking
-pyright
-
-# Code formatting
-black .
-```
-
 ## License
 
 See LICENSE file for details.
