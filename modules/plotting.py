@@ -159,7 +159,7 @@ def plot_feature_vs_current(
     if feature_units:
         y_label += f" ({feature_units})"
 
-    current_label = f"{current_col.replace('_', ' ').title()} (pA)"
+    current_label = "Current step (pA)"
 
     try:
         ax.plot(
