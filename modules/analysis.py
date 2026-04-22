@@ -18,6 +18,7 @@ def run_analysis_on_abf(
     abf: Optional[pyabf.ABF],
     original_filename: str,
     user_selected_features: List[str],
+    channel_selection: int,
     stimulus_epoch_index: int,
     detection_threshold: float,
     derivative_threshold: float,
@@ -100,7 +101,11 @@ def run_analysis_on_abf(
 
     try:
         for sweep_num in abf.sweepList:
-            abf.setSweep(sweep_num)
+            try:
+                abf.setSweep(sweep_num, channel=channel_selection)
+            except ValueError as e:
+                helper._log_message("ERROR", abf_id_str, None, f"Channel {channel_selection} not found: {e}")
+                return analysis_output
 
 
             # --- Calculate Average Stimulus Current (for eFEL trace dict, in nA) ---

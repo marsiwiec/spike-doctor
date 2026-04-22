@@ -62,6 +62,13 @@ app_ui = ui.page_fluid(
             ui.h5("Analysis Parameters"),
             ui.tags.b("Stimulus Definition:"),
             ui.input_numeric(
+                "channel_selection",
+                "Channel (0-based):",
+                value=0,
+                min=0,
+                step=1,
+            ),
+            ui.input_numeric(
                 "stimulus_epoch_index",
                 "Stimulus Epoch Index (0-based):",
                 value=2,
@@ -214,11 +221,13 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     analysis_results_list = reactive.Calc(
         lambda: [
             {
+                "channel_selection": input.channel_selection(),
                 **file_data,
                 **analysis.run_analysis_on_abf(
                     abf=file_data.get("abf_object"),
                     original_filename=file_data.get("original_filename"),
                     user_selected_features=selected_efel_features(),
+                    channel_selection=input.channel_selection(),
                     stimulus_epoch_index=input.stimulus_epoch_index(),
                     detection_threshold=input.detection_threshold(),
                     derivative_threshold=input.derivative_threshold(),
