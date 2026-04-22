@@ -39,6 +39,7 @@ def plot_raw_traces(
     abf: Optional[pyabf.ABF],
     filename: str,
     ax: plt.Axes,
+    channel: int = 0,
     load_error: Optional[str] = None,
     title_prefix: str = "Raw Traces",
 ) -> None:
@@ -76,7 +77,7 @@ def plot_raw_traces(
         else:
             num_to_plot = min(num_sweeps, constants.MAX_RAW_PLOT_SWEEPS)
             for i in range(num_to_plot):
-                abf.setSweep(i)
+                abf.setSweep(i, channel=channel)
                 ax.plot(abf.sweepX, abf.sweepY, lw=0.5, alpha=0.7)
             if num_sweeps > num_to_plot:
                 plot_title += f" (First {num_to_plot})"
@@ -271,6 +272,7 @@ def _prepare_phase_plot_data(
     abf_obj: Optional[pyabf.ABF],
     filename: str,
     current_col: str,
+    channel: int = 0,
 ) -> Tuple[
     Optional[np.ndarray], Optional[np.ndarray], Optional[int], Optional[float], str
 ]:
@@ -319,7 +321,7 @@ def _prepare_phase_plot_data(
 
     # Extract voltage and calculate dV/dt
     try:
-        abf_obj.setSweep(target_sweep_num)
+        abf_obj.setSweep(target_sweep_num, channel=channel)
         phase_v = abf_obj.sweepY
         time_s = abf_obj.sweepX
 
@@ -366,6 +368,7 @@ def _generate_summary_plots_for_file(
     abf_obj = result_data.get("abf_object")
     load_err = result_data.get("load_error")
     analysis_df = result_data.get("analysis_df")  
+    channel = result_data.get("channel_selection", 0)
 
     raw_ax, sc_ax, phase_ax = axes
 
@@ -375,6 +378,7 @@ def _generate_summary_plots_for_file(
             abf_obj,
             filename,
             ax=raw_ax,
+            channel=channel,
             load_error=load_err,
             title_prefix="Raw",  
         )
@@ -412,7 +416,7 @@ def _generate_summary_plots_for_file(
     # 3. Phase Plane Plot
     try:
         phase_v, phase_dvdt, target_sweep, target_current, suffix = (
-            _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col)
+            _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col, channel=channel)
         )
         plot_phase_plane(
             phase_v,
