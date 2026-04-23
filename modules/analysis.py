@@ -178,15 +178,15 @@ def run_analysis_on_abf(
             # --- Manual Calculations (Cm) ---
 
             Cm_manual_pF = np.nan
-            tau_efel_ms = efel_results_parsed.get("time_constant", np.nan)
-            R_in_MOhm = efel_results_parsed.get("ohmic_input_resistance", np.nan)
+            tau_efel_ms = efel_results_parsed.get("time_constant", [np.nan])[0]
+            R_in_MOhm = efel_results_parsed.get("ohmic_input_resistance", [np.nan])[0]
 
             
             # Ensure spike_count is a valid integer (0 if NaN/None)
-            spike_count = efel_results_parsed.get("spike_count", np.nan)
-            spike_count = 0 if pd.isna(spike_count) else int(spike_count)
+            spike_count_val = efel_results_parsed.get("spike_count", [np.nan])[0]
+            spike_count = 0 if pd.isna(spike_count_val) else int(spike_count_val)
 
-            V_base_efel = efel_results_parsed.get("voltage_base", np.nan)
+            V_base_efel = efel_results_parsed.get("voltage_base", [np.nan])[0]
 
             # Calculate Cm only if Tau and Rin are valid and positive
             if (
@@ -200,35 +200,47 @@ def run_analysis_on_abf(
                     Cm_manual_pF = np.nan
 
             # --- Assemble Sweep Results ---
-            sweep_data = {
-                "filename": original_filename,
-                "sweep": sweep_num,
-                constants.CURRENT_COL_NAME: trace_for_efel["stimulus_current"][0] * 1000,
-                "capacitance_pF": Cm_manual_pF,
-                **{ 
-                    feat: efel_results_parsed.get(feat, np.nan)
-                    for feat in user_selected_features
-                },
-            }
+            max_len = 1
+            for feat in user_selected_features:
+                val = efel_results_parsed.get(feat, [np.nan])
+                if isinstance(val, list) and len(val) > max_len:
+                    max_len = len(val)
 
-            # --- Sanitize results based on spike count ---
-            if spike_count <= 1:
-                for feature in sweep_data:
-                    if "frequency" in feature.lower() or "isi" in feature.lower():
-                        sweep_data[feature] = np.nan
-            if spike_count == 0:
-                for feature in sweep_data:
-                    if "time_to_" in feature.lower() or "latency" in feature.lower():
-                        sweep_data[feature] = np.nan
-            if spike_count > 0:
-                sweep_data["capacitance_pF"] = np.nan
-            if stimulus_current_for_efel_nA >= 0:
-                sweep_data["time_constant"] = np.nan
-                sweep_data["capacitance_pF"] = np.nan
-                sweep_data["ohmic_input_resistance"] = np.nan
+            for i in range(max_len):
+                sweep_data = {
+                    "filename": original_filename,
+                    "sweep": sweep_num,
+                    constants.CURRENT_COL_NAME: trace_for_efel["stimulus_current"][0] * 1000,
+                    "event_index": i,
+                    "capacitance_pF": Cm_manual_pF if i == 0 else np.nan,
+                }
+                
+                for feat in user_selected_features:
+                    val_list = efel_results_parsed.get(feat, [np.nan])
+                    if i < len(val_list):
+                        sweep_data[feat] = val_list[i]
+                    else:
+                        sweep_data[feat] = np.nan
 
+                # --- Sanitize results based on spike count ---
+                if spike_count <= 1:
+                    for feature in list(sweep_data.keys()):
+                        if "frequency" in feature.lower() or "isi" in feature.lower():
+                            sweep_data[feature] = np.nan
+                if spike_count == 0:
+                    for feature in list(sweep_data.keys()):
+                        if "time_to_" in feature.lower() or "latency" in feature.lower():
+                            sweep_data[feature] = np.nan
+                if spike_count > 0:
+                    sweep_data["capacitance_pF"] = np.nan
+                if stimulus_current_for_efel_nA >= 0:
+                    if "time_constant" in sweep_data:
+                        sweep_data["time_constant"] = np.nan
+                    sweep_data["capacitance_pF"] = np.nan
+                    if "ohmic_input_resistance" in sweep_data:
+                        sweep_data["ohmic_input_resistance"] = np.nan
 
-            sweep_results_list.append(sweep_data)
+                sweep_results_list.append(sweep_data)
 
             # --- Generate Debug Plot (only once per file, for a designated sweep) ---
             # Check flag and if current sweep is the target debug sweep
@@ -358,7 +370,7 @@ def run_analysis_on_abf(
         analysis_df = pd.DataFrame(sweep_results_list)
 
         # Order columns: metadata first, then capacitance, then user-selected eFEL features
-        priority_cols = ["filename", "sweep", current_col_name, "capacitance_pF"]
+        priority_cols = ["filename", "sweep", current_col_name, "event_index", "capacitance_pF"]
         efel_cols = sorted([c for c in analysis_df.columns if c not in priority_cols])
         ordered_cols = [c for c in priority_cols if c in analysis_df.columns] + efel_cols
 

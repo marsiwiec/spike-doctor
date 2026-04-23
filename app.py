@@ -551,9 +551,9 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                         )
 
                     try:
-
+                        pivot_idx = [c for c in index_cols if c != "filename"]
                         df_pivot = df_subset.pivot_table(
-                            index=["sweep", constants.CURRENT_COL_NAME],
+                            index=pivot_idx,
                             columns="filename",
                             values=var_name,
                         )
