@@ -100,30 +100,38 @@ def is_current_clamp(abf: Optional[pyabf.ABF]) -> bool:
 
 def parse_efel_value(
     raw_efel_result: Optional[Dict[str, Any]], feature_key: str
-) -> float:
+) -> list:
     """
-    Safely extracts and converts a single float value from eFEL results.
+    Safely extracts and converts a single float value or list of values from eFEL results.
     Handles None results, empty lists, NaN, and conversion errors.
+    Always returns a list of floats.
     """
     if raw_efel_result is None:
-        return np.nan
+        return [np.nan]
     value = raw_efel_result.get(feature_key)
     if value is None:
-        return np.nan
-    # eFEL often returns lists, even for single values
+        return [np.nan]
+    
     if isinstance(value, (list, np.ndarray)):
         if len(value) == 0:
-            return np.nan
-        first_val = value[0]
-    else:
-        first_val = value
+            return [np.nan]
+        result = []
+        for v in value:
+            if pd.isna(v):
+                result.append(np.nan)
+            else:
+                try:
+                    result.append(float(v))
+                except (TypeError, ValueError):
+                    result.append(np.nan)
+        return result
 
-    if pd.isna(first_val):
-        return np.nan
+    if pd.isna(value):
+        return [np.nan]
     try:
-        return float(first_val)
+        return [float(value)]
     except (TypeError, ValueError):
-        return np.nan
+        return [np.nan]
 
 
 def is_valid_analysis_df(df: Any) -> bool:
