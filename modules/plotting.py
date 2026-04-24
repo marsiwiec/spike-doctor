@@ -3,7 +3,7 @@
 # ==============================================================================
 
 import warnings
-from typing import Optional, Sequence, Dict, Any, Tuple
+from typing import Optional, Sequence, Dict, Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -15,24 +15,16 @@ from modules import constants, helper
 def _plot_error_message(ax: plt.Axes, message: str, title: Optional[str] = None):
     """Helper to display an error message on a plot axes."""
     ax.text(
-        0.5,
-        0.5,
-        message,
-        color="red",
-        ha="center",
-        va="center",
-        fontsize=9,
-        transform=ax.transAxes,
+        0.5, 0.5, message, color="red", ha="center", va="center",
+        fontsize=9, transform=ax.transAxes,
     )
     if title:
         ax.set_title(title, fontsize=9)
     ax.tick_params(
         axis="both", labelbottom=False, labelleft=False, bottom=False, left=False
     )
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["bottom"].set_visible(False)
-    ax.spines["left"].set_visible(False)
+    for spine in ("top", "right", "bottom", "left"):
+        ax.spines[spine].set_visible(False)
 
 
 def plot_raw_traces(
@@ -57,41 +49,20 @@ def plot_raw_traces(
     try:
         num_sweeps = getattr(abf, "sweepCount", 0)
         if num_sweeps == 0:
-            ax.text(
-                0.5,
-                0.5,
-                "No sweeps in file",
-                ha="center",
-                va="center",
-                fontsize=9,
-                transform=ax.transAxes,
-            )
-            ax.set_title(plot_title, fontsize=9)
-            ax.tick_params(
-                axis="both",
-                labelbottom=False,
-                labelleft=False,
-                bottom=False,
-                left=False,
-            )
-        else:
-            num_to_plot = min(num_sweeps, constants.MAX_RAW_PLOT_SWEEPS)
-            for i in range(num_to_plot):
-                abf.setSweep(i, channel=channel)
-                ax.plot(abf.sweepX, abf.sweepY, lw=0.5, alpha=0.7)
-            if num_sweeps > num_to_plot:
-                plot_title += f" (First {num_to_plot})"
+            _plot_error_message(ax, "No sweeps in file", plot_title)
+            return
+
+        num_to_plot = min(num_sweeps, constants.MAX_RAW_PLOT_SWEEPS)
+        for i in range(num_to_plot):
+            abf.setSweep(i, channel=channel)
+            ax.plot(abf.sweepX, abf.sweepY, lw=0.5, alpha=0.7)
+        if num_sweeps > num_to_plot:
+            plot_title += f" (First {num_to_plot})"
 
         plot_title += " (CC)" if helper.is_current_clamp(abf) else " (VC?)"
         ax.set_title(plot_title, fontsize=9)
-        ax.set_xlabel(
-            f"{getattr(abf, 'sweepLabelX', 'Time')}",
-            fontsize=8,
-        )
-        ax.set_ylabel(
-            f"{getattr(abf, 'sweepLabelY', 'Signal')}",
-            fontsize=8,
-        )
+        ax.set_xlabel(f"{getattr(abf, 'sweepLabelX', 'Time')}", fontsize=8)
+        ax.set_ylabel(f"{getattr(abf, 'sweepLabelY', 'Signal')}", fontsize=8)
         ax.tick_params(axis="both", which="major", labelsize=8)
         ax.grid(True, linestyle=":", alpha=0.6)
 
@@ -103,7 +74,7 @@ def plot_raw_traces(
 
 def plot_feature_vs_current(
     analysis_df: Optional[pd.DataFrame],
-    feature_name,
+    feature_name: str,
     current_col: str,
     filename: str,
     abf: Optional[pyabf.ABF],
@@ -114,45 +85,22 @@ def plot_feature_vs_current(
     plot_title = f"{feature_title} vs Current"
     ax.set_title(plot_title, fontsize=9)
 
-    error_message = None
-    plot_data = pd.DataFrame()
-
     if not helper.is_valid_analysis_df(analysis_df):
-        error_message = "No analysis data."
-    elif feature_name not in analysis_df.columns:
-        error_message = f"Feature '{feature_name}'\nnot found."
-    elif current_col not in analysis_df.columns:
-        error_message = f"Current col '{current_col}'\nnot found."
-    else:
-        if not pd.api.types.is_numeric_dtype(
-            analysis_df[current_col]
-        ) or not pd.api.types.is_numeric_dtype(analysis_df[feature_name]):
-            error_message = "Data columns contain\nnon-numeric values."
-        else:
-            plot_data = analysis_df[[current_col, feature_name]].dropna()
-            if plot_data.empty:
-                error_message = "No valid data points\nfor plotting."
+        _plot_error_message(ax, "No analysis data.", plot_title)
+        return
+    if feature_name not in analysis_df.columns:
+        _plot_error_message(ax, f"Feature '{feature_name}'\nnot found.", plot_title)
+        return
+    if current_col not in analysis_df.columns:
+        _plot_error_message(ax, f"Current col '{current_col}'\nnot found.", plot_title)
+        return
+    if not pd.api.types.is_numeric_dtype(analysis_df[current_col]) or not pd.api.types.is_numeric_dtype(analysis_df[feature_name]):
+        _plot_error_message(ax, "Data columns contain\nnon-numeric values.", plot_title)
+        return
 
-    if error_message:
-        ax.text(
-            0.5,
-            0.5,
-            error_message,
-            ha="center",
-            va="center",
-            fontsize=9,
-            color="gray",
-            transform=ax.transAxes,
-        )
-        helper._log_message(
-            "WARN",
-            filename,
-            None,
-            f"Plotting '{feature_name}': {error_message.replace(chr(10),' ')}",
-        )
-        ax.tick_params(
-            axis="both", labelbottom=False, labelleft=False, bottom=False, left=False
-        )
+    plot_data = analysis_df[[current_col, feature_name]].dropna()
+    if plot_data.empty:
+        _plot_error_message(ax, "No valid data points\nfor plotting.", plot_title)
         return
 
     y_label = feature_title
@@ -160,23 +108,17 @@ def plot_feature_vs_current(
     if feature_units:
         y_label += f" ({feature_units})"
 
-    current_label = "Current step (pA)"
-
     try:
         ax.plot(
-            plot_data[current_col],
-            plot_data[feature_name],
-            marker="o",
-            linestyle="-",
-            markersize=4,
+            plot_data[current_col], plot_data[feature_name],
+            marker="o", linestyle="-", markersize=4,
         )
-        ax.set_xlabel(current_label, fontsize=8)
+        ax.set_xlabel("Current step (pA)", fontsize=8)
         ax.set_ylabel(y_label, fontsize=8)
         ax.tick_params(axis="both", which="major", labelsize=8)
         ax.grid(True, linestyle=":", alpha=0.6)
         ax.axhline(0, color="grey", lw=0.5, linestyle="--")
         ax.axvline(0, color="grey", lw=0.5, linestyle="--")
-
     except Exception as e:
         helper._log_message("ERROR", filename, None, f"Plotting '{feature_name}' failed: {e}")
         ax.cla()
@@ -193,7 +135,7 @@ def plot_phase_plane(
     ax: plt.Axes = None,
 ) -> None:
     """Generates a phase-plane plot onto given axes."""
-    plot_title = f"Phase Plane Plot at 2x Rheobase\n"
+    plot_title = "Phase Plane Plot at 2x Rheobase\n"
     file_sweep_info = f"{filename}"
     if sweep_num is not None:
         file_sweep_info += f" (Sw {sweep_num}"
@@ -208,16 +150,12 @@ def plot_phase_plane(
 
     ax.set_title(plot_title, fontsize=9)
 
-    # Check data validity or if suffix indicates an issue
     show_error_text = False
-    err_msg = title_suffix.replace(": ", ":\n")  # Default error message is the suffix
+    err_msg = title_suffix.replace(": ", ":\n")
     if (
-        voltage is None
-        or dvdt is None
-        or not isinstance(voltage, np.ndarray)
-        or not isinstance(dvdt, np.ndarray)
-        or len(voltage) != len(dvdt)
-        or len(voltage) == 0
+        voltage is None or dvdt is None
+        or not isinstance(voltage, np.ndarray) or not isinstance(dvdt, np.ndarray)
+        or len(voltage) != len(dvdt) or len(voltage) == 0
     ):
         if not title_suffix or "N/A" in title_suffix:
             err_msg = "Invalid or mismatched\nVoltage/dVdt data"
@@ -230,20 +168,12 @@ def plot_phase_plane(
 
     if show_error_text:
         ax.text(
-            0.5,
-            0.5,
-            err_msg,
-            ha="center",
-            va="center",
-            color="gray",
-            fontsize=9,
-            transform=ax.transAxes,
+            0.5, 0.5, err_msg, ha="center", va="center",
+            color="gray", fontsize=9, transform=ax.transAxes,
         )
         if "error" not in title_suffix.lower():
             helper._log_message(
-                "WARN",
-                filename,
-                sweep_num,
+                "WARN", filename, sweep_num,
                 f"Phase plane plot skipped/failed: {err_msg.replace(chr(10),' ')}",
             )
         ax.tick_params(
@@ -253,18 +183,15 @@ def plot_phase_plane(
 
     try:
         ax.plot(voltage, dvdt, color="black", lw=0.5)
-        ax.set_xlabel(f"Membrane Potential (mV)", fontsize=8)
+        ax.set_xlabel("Membrane Potential (mV)", fontsize=8)
         ax.set_ylabel("dV/dt (mV/ms)", fontsize=8)
         ax.tick_params(axis="both", which="major", labelsize=8)
         ax.grid(True, linestyle=":", alpha=0.6)
         ax.axhline(0, color="grey", lw=0.5, linestyle="--")
-
     except Exception as e:
         helper._log_message("ERROR", filename, sweep_num, f"Phase plane plotting failed: {e}")
         ax.cla()
-        _plot_error_message(
-            ax, f"Plotting Error:\n{e}", f"Phase Plot Error: {filename}"
-        )
+        _plot_error_message(ax, f"Plotting Error:\n{e}", f"Phase Plot Error: {filename}")
 
 
 def _prepare_phase_plot_data(
@@ -273,93 +200,79 @@ def _prepare_phase_plot_data(
     filename: str,
     current_col: str,
     channel: int = 0,
-) -> Tuple[
-    Optional[np.ndarray], Optional[np.ndarray], Optional[int], Optional[float], str
-]:
+) -> dict:
     """
     Calculates data needed for the phase plot (V, dV/dt) for a sweep near 2x rheobase.
 
-    Returns:
-        Tuple: (voltage_mV, dvdt_mV_ms, target_sweep_num, target_current_pA, status_suffix)
-               Returns (None, None, None, None, error_message) on failure.
+    Returns a dict with keys:
+        voltage, dvdt, sweep, current, status
+    On failure, voltage/dvdt/sweep/current are None and status is the error message.
     """
     if not isinstance(abf_obj, pyabf.ABF):
-        return None, None, None, None, "ABF Not Loaded"
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "ABF Not Loaded"}
     if not helper.is_valid_analysis_df(analysis_df):
-        return None, None, None, None, "Analysis Failed"
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "Analysis Failed"}
     if current_col not in analysis_df.columns or "spike_count" not in analysis_df.columns:
-        return None, None, None, None, "Required Columns Missing"
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "Required Columns Missing"}
     if not pd.api.types.is_numeric_dtype(analysis_df[current_col]) or not pd.api.types.is_numeric_dtype(analysis_df["spike_count"]):
-        return None, None, None, None, "Non-numeric Data"
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "Non-numeric Data"}
 
-    # Find spiking sweeps with positive current
-    spiking_sweeps = analysis_df[
+    spiking = analysis_df[
         (analysis_df["spike_count"].fillna(0) >= 1)
         & (analysis_df[current_col].fillna(-np.inf) > 0)
         & np.isfinite(analysis_df[current_col])
     ]
-    if spiking_sweeps.empty:
-        return None, None, None, None, "Rheobase Not Found"
+    if spiking.empty:
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "Rheobase Not Found"}
 
-    # Calculate 2x rheobase current
-    rheobase_current = spiking_sweeps[current_col].min()
-    target_current = 2 * rheobase_current
+    rheobase = spiking[current_col].min()
+    target_current = 2 * rheobase
 
-    # Find sweep closest to 2x rheobase
-    valid_current_df = analysis_df.dropna(subset=[current_col])
-    valid_current_df = valid_current_df[np.isfinite(valid_current_df[current_col])]
-    if valid_current_df.empty:
-        return None, None, None, None, "No Valid Current Data"
+    valid = analysis_df.dropna(subset=[current_col])
+    valid = valid[np.isfinite(valid[current_col])]
+    if valid.empty:
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "No Valid Current Data"}
 
-    closest_idx = (valid_current_df[current_col] - target_current).abs().idxmin()
-    closest_sweep_row = valid_current_df.loc[closest_idx]
-    if "sweep" not in closest_sweep_row:
-        return None, None, None, None, "Sweep Column Missing"
+    closest_idx = (valid[current_col] - target_current).abs().idxmin()
+    closest = valid.loc[closest_idx]
+    if "sweep" not in closest:
+        return {"voltage": None, "dvdt": None, "sweep": None, "current": None, "status": "Sweep Column Missing"}
 
-    target_sweep_num = int(closest_sweep_row["sweep"])
-    target_current_pA = closest_sweep_row[current_col]
+    target_sweep = int(closest["sweep"])
+    target_current_pA = closest[current_col]
 
-    # Extract voltage and calculate dV/dt
     try:
-        abf_obj.setSweep(target_sweep_num, channel=channel)
+        abf_obj.setSweep(target_sweep, channel=channel)
         phase_v = abf_obj.sweepY
         time_s = abf_obj.sweepX
 
         if not (isinstance(phase_v, np.ndarray) and isinstance(time_s, np.ndarray)
                 and len(phase_v) > 1 and len(time_s) > 1 and len(phase_v) == len(time_s)):
-            return phase_v, None, target_sweep_num, target_current_pA, "Sweep Data Invalid"
+            return {"voltage": phase_v, "dvdt": None, "sweep": target_sweep, "current": target_current_pA, "status": "Sweep Data Invalid"}
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             phase_dvdt = np.gradient(phase_v, time_s * 1000.0)
 
-        return phase_v, phase_dvdt, target_sweep_num, target_current_pA, ""
-
+        return {"voltage": phase_v, "dvdt": phase_dvdt, "sweep": target_sweep, "current": target_current_pA, "status": ""}
     except IndexError:
-        return None, None, target_sweep_num, target_current_pA, f"Sweep Index Error: {target_sweep_num}"
+        return {"voltage": None, "dvdt": None, "sweep": target_sweep, "current": target_current_pA, "status": f"Sweep Index Error: {target_sweep}"}
     except Exception as e:
-        return None, None, target_sweep_num, target_current_pA, f"Sweep Load Error: {e}"
+        return {"voltage": None, "dvdt": None, "sweep": target_sweep, "current": target_current_pA, "status": f"Sweep Load Error: {e}"}
 
 
 def _generate_summary_plots_for_file(
     result_data: Dict[str, Any],
-    axes: Sequence[plt.Axes],  # Expects 3 axes: [raw_ax, sc_ax, phase_ax]
+    axes: Sequence[plt.Axes],
     current_col: str = constants.CURRENT_COL_NAME,
 ) -> None:
     """
     Generates the standard set of summary plots (raw, SC, phase) onto provided axes.
-
-    Args:
-        result_data: Dictionary containing analysis results for one file
-                     (must include 'original_filename', 'abf_object', 'analysis_df', 'load_error').
-        axes: A sequence (list or tuple) of 3 Matplotlib Axes objects.
-        current_col: Name of the column containing current step values.
+    Expects 3 axes: [raw_ax, sc_ax, phase_ax].
     """
     if len(axes) != 3:
         helper._log_message(
-            "ERROR",
-            result_data.get("original_filename", "UnknownFile"),
-            None,
+            "ERROR", result_data.get("original_filename", "UnknownFile"), None,
             "_generate_summary_plots_for_file expects 3 axes.",
         )
         return
@@ -367,7 +280,7 @@ def _generate_summary_plots_for_file(
     filename = result_data.get("original_filename", "Unknown Filename")
     abf_obj = result_data.get("abf_object")
     load_err = result_data.get("load_error")
-    analysis_df = result_data.get("analysis_df")  
+    analysis_df = result_data.get("analysis_df")
     channel = result_data.get("channel_selection", 0)
 
     raw_ax, sc_ax, phase_ax = axes
@@ -375,57 +288,33 @@ def _generate_summary_plots_for_file(
     # 1. Raw Trace Plot
     try:
         plot_raw_traces(
-            abf_obj,
-            filename,
-            ax=raw_ax,
-            channel=channel,
-            load_error=load_err,
-            title_prefix="Raw",  
+            abf_obj, filename, ax=raw_ax, channel=channel,
+            load_error=load_err, title_prefix="Raw",
         )
     except Exception as e_plot:
         helper._log_message("ERROR", filename, None, f"Summary Raw Plot Error: {e_plot}")
-        _plot_error_message(
-            raw_ax, f"Raw Plot Error:\n{e_plot}", f"Raw Error: {filename}"
-        )
+        _plot_error_message(raw_ax, f"Raw Plot Error:\n{e_plot}", f"Raw Error: {filename}")
 
     # 2. Spike Count vs Current Plot
     try:
         if load_err:
-            _plot_error_message(
-                sc_ax, f"Load Error:\n{load_err}", "Spike Count vs Current"
-            )
+            _plot_error_message(sc_ax, f"Load Error:\n{load_err}", "Spike Count vs Current")
         elif not helper.is_valid_analysis_df(analysis_df):
-            _plot_error_message(
-                sc_ax, "Analysis skipped\nor failed.", "Spike Count vs Current"
-            )
+            _plot_error_message(sc_ax, "Analysis skipped\nor failed.", "Spike Count vs Current")
         else:
             plot_feature_vs_current(
-                analysis_df,
-                "spike_count",
-                current_col,
-                filename,
-                abf_obj,  
-                ax=sc_ax,
+                analysis_df, "spike_count", current_col, filename, abf_obj, ax=sc_ax,
             )
     except Exception as e_plot:
         helper._log_message("ERROR", filename, None, f"Summary SC Plot Error: {e_plot}")
-        _plot_error_message(
-            sc_ax, f"SC Plot Error:\n{e_plot}", "Spike Count vs Current"
-        )
+        _plot_error_message(sc_ax, f"SC Plot Error:\n{e_plot}", "Spike Count vs Current")
 
     # 3. Phase Plane Plot
     try:
-        phase_v, phase_dvdt, target_sweep, target_current, suffix = (
-            _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col, channel=channel)
-        )
+        data = _prepare_phase_plot_data(analysis_df, abf_obj, filename, current_col, channel=channel)
         plot_phase_plane(
-            phase_v,
-            phase_dvdt,
-            filename,
-            target_sweep,
-            target_current,
-            suffix,  # Contains status/error message from prep function
-            ax=phase_ax,
+            data["voltage"], data["dvdt"], filename,
+            data["sweep"], data["current"], data["status"], ax=phase_ax,
         )
     except Exception as e_plot:
         helper._log_message("ERROR", filename, None, f"Summary Phase Plot Error: {e_plot}")
