@@ -20,8 +20,8 @@ def _log_message(level: str, abf_id: str, sweep_num: Optional[int], message: str
     print(f"{prefix}: {message}")
 
 
-def fig_to_src(fig: Optional[plt.Figure]) -> Optional[str]:
-    """Converts a Matplotlib figure to a base64 encoded image source."""
+def fig_to_src_and_close(fig: Optional[plt.Figure]) -> Optional[str]:
+    """Converts a Matplotlib figure to a base64 encoded image source, then closes it."""
     if fig is None:
         return None
     try:
@@ -29,7 +29,7 @@ def fig_to_src(fig: Optional[plt.Figure]) -> Optional[str]:
             fig.savefig(buf, format="png", bbox_inches="tight")
             buf.seek(0)
             base64_str = base64.b64encode(buf.read()).decode("utf-8")
-        plt.close(fig)  
+        plt.close(fig)
         return f"data:image/png;base64,{base64_str}"
     except Exception as e:
         _log_message("ERROR", "FigConv", None, f"Figure conversion failed: {e}")
@@ -89,18 +89,14 @@ def is_current_clamp(abf: Optional[pyabf.ABF]) -> bool:
     try:
         y_units = str(getattr(abf, "sweepUnitsY", "")).lower()
         c_units = str(getattr(abf, "sweepUnitsC", "")).lower()
-        # Primary check: Voltage recorded (Y) and Current commanded (C)
         is_volt_y = "v" in y_units
-        is_curr_c = "a" in c_units
-        # Fallback: Sometimes command channel units might be missing/weird in CC
+        is_curr_c = any(u in c_units for u in ("pa", "na", "a"))
         return (is_volt_y and is_curr_c) or (is_volt_y and not c_units)
     except Exception:
         return False
 
 
-def parse_efel_value(
-    raw_efel_result: Optional[Dict[str, Any]], feature_key: str
-) -> list:
+def parse_efel_value(raw_efel_result: Optional[Dict[str, Any]], feature_key: str) -> list:
     """
     Safely extracts and converts a single float value or list of values from eFEL results.
     Handles None results, empty lists, NaN, and conversion errors.
@@ -108,30 +104,21 @@ def parse_efel_value(
     """
     if raw_efel_result is None:
         return [np.nan]
-    value = raw_efel_result.get(feature_key)
-    if value is None:
+    val = raw_efel_result.get(feature_key)
+    if val is None:
         return [np.nan]
-    
-    if isinstance(value, (list, np.ndarray)):
-        if len(value) == 0:
-            return [np.nan]
-        result = []
-        for v in value:
-            if pd.isna(v):
-                result.append(np.nan)
-            else:
-                try:
-                    result.append(float(v))
-                except (TypeError, ValueError):
-                    result.append(np.nan)
-        return result
 
-    if pd.isna(value):
+    arr = np.atleast_1d(val)
+    if len(arr) == 0:
         return [np.nan]
-    try:
-        return [float(value)]
-    except (TypeError, ValueError):
-        return [np.nan]
+
+    out = []
+    for v in arr:
+        try:
+            out.append(float(v) if pd.notna(v) else np.nan)
+        except (TypeError, ValueError):
+            out.append(np.nan)
+    return out
 
 
 def is_valid_analysis_df(df: Any) -> bool:
