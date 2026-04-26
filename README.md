@@ -1,6 +1,6 @@
 # Spike Doctor
 
-A Python [Shiny](https://shiny.posit.co/py/) web application for analyzing whole-cell current clamp electrophysiology recordings. Spike Doctor focuses on spike detection and extraction of subthreshold and suprathreshold features from Axon Instruments ABF files.
+A [Shiny](https://shiny.posit.co/py/) web application written in Python for analyzing whole-cell current clamp recordings. Spike Doctor focuses on action potential detection and extraction of subthreshold and suprathreshold features from Axon Instruments ABF files using [pyABF](https://github.com/swharden/pyABF) and the [eFEL](https://github.com/BlueBrain/eFEL) feature extraction library.
 
 <img src="https://github.com/marsiwiec/spike-doctor/blob/main/assets/spike-doctor.png?raw=true" width="80%">
 
@@ -81,7 +81,7 @@ The Basic tab provides commonly used features with friendly names:
 
 ### Advanced Features
 
-The Advanced tab provides access to the complete eFEL feature library (200+ features). See the [eFEL documentation](https://efel.readthedocs.io/en/latest/eFeatures.html) for detailed descriptions.
+The Advanced tab provides access to the complete [eFEL](https://github.com/BlueBrain/eFEL) feature library (200+ features). See the [eFEL documentation](https://efel.readthedocs.io/en/latest/eFeatures.html) for detailed descriptions.
 
 ## Output Formats
 
@@ -130,4 +130,4 @@ See LICENSE file for details.
 ## Acknowledgments
 
 - [eFEL](https://github.com/BlueBrain/eFEL) by the Blue Brain Project for the comprehensive feature extraction library
-- [pyABF](https://github.com/swharden/pyABF) by Scott W Harden for the excellent ABF file reader
+-[pyABF](https://github.com/swharden/pyABF) by [swharden](https://github.com/swharden) for the excellent ABF file reader
