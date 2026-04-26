@@ -1,49 +1,43 @@
 from typing import List, Dict, Tuple
 
-# ==============================================================================
-# Configuration Constants
-# ==============================================================================
-
-# Basic features with display names and descriptions for tooltips
-# Format: feature_name -> (display_name, description)
 BASIC_EFEL_FEATURES: Dict[str, Tuple[str, str]] = {
     "spike_count": (
         "Spike Count",
-        "Number of action potentials detected during the stimulus period"
+        "Number of action potentials detected during the stimulus period",
     ),
     "voltage_base": (
         "Resting Voltage",
-        "Mean voltage before stimulus onset (mV)"
+        "Mean voltage before stimulus onset (mV)",
     ),
     "steady_state_voltage_stimend": (
         "Steady-State Voltage",
-        "Mean voltage at the end of stimulus period (mV)"
+        "Mean voltage at the end of stimulus period (mV)",
     ),
     "voltage_deflection": (
         "Voltage Deflection",
-        "Difference between steady-state and resting voltage (mV)"
+        "Difference between steady-state and resting voltage (mV)",
     ),
     "ohmic_input_resistance": (
         "Input Resistance",
-        "Membrane input resistance calculated from voltage deflection (MΩ)"
+        "Membrane input resistance calculated from voltage deflection (MΩ)",
     ),
     "mean_frequency": (
         "Mean Firing Frequency",
-        "Average firing rate during the stimulus period (Hz)"
+        "Average firing rate during the stimulus period (Hz)",
     ),
     "time_to_first_spike": (
         "Latency to First Spike",
-        "Time from stimulus onset to first action potential (ms)"
+        "Time from stimulus onset to first action potential (ms)",
     ),
     "time_constant": (
         "Membrane Time Constant",
-        "Tau from exponential fit of voltage response to hyperpolarizing current (ms)"
+        "Tau from exponential fit of voltage response to hyperpolarizing current (ms)",
     ),
 }
 
 DEFAULT_EFEL_FEATURES: List[str] = list(BASIC_EFEL_FEATURES.keys())
 
-# Features needed internally even if not selected
+# Needed internally even if the user does not select them.
 REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
     "spike_count",
     "voltage_base",
@@ -51,7 +45,7 @@ REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
     "ohmic_input_resistance",
 ]
 
-# Features that require a stimulus step to be meaningful
+# These features are meaningless when there is no stimulus step.
 STIMULUS_DEPENDENT_EFEL_FEATURES: List[str] = [
     "time_constant",
     "time_constant_slow",
@@ -65,6 +59,5 @@ STIMULUS_DEPENDENT_EFEL_FEATURES: List[str] = [
     "multiple_decay_time_constant_after_stim",
 ]
 
-# --- Plotting & Debugging ---
 MAX_RAW_PLOT_SWEEPS: int = 100
 CURRENT_COL_NAME = "current_step_pA"
