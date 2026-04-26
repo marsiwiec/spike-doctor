@@ -11,6 +11,7 @@
   packages = with pkgs; [
     black
     pyright
+    zlib
   ];
 
   # https://devenv.sh/languages/
