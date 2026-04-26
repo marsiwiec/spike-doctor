@@ -2,7 +2,7 @@ import io
 import traceback
 import warnings
 from pathlib import Path
-import shiny
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
@@ -27,7 +27,6 @@ ADVANCED_EFEL_FEATURES = sorted([
 
 
 def _create_basic_feature_checkboxes():
-    """Create checkbox inputs with tooltips for basic features."""
     elements = []
     for feature_id, (display_name, description) in constants.BASIC_EFEL_FEATURES.items():
         if feature_id in AVAILABLE_EFEL_FEATURES:
@@ -146,113 +145,105 @@ app_ui = ui.page_fluid(
 )
 
 
-# ==============================================================================
-# Download Helpers
-# ==============================================================================
-
 def _build_excel_bytes(df_before_pivot: pd.DataFrame) -> bytes:
-    """Build an Excel workbook from the combined analysis DataFrame."""
+    """Pivot each dependent variable into its own sheet."""
     index_cols = ["filename", "sweep", constants.CURRENT_COL_NAME]
     missing_cols = [c for c in index_cols if c not in df_before_pivot.columns]
     if missing_cols:
         raise ValueError(f"Index columns missing for Excel export: {missing_cols}")
 
-    dependent_vars = [c for c in df_before_pivot.columns if c not in index_cols]
+    dependent_vars = [c for c in df_before_pivot.columns if c not in index_cols + ["event_index"]]
     if not dependent_vars:
         raise ValueError("No dependent variable columns found for Excel export.")
 
     output_buffer = io.BytesIO()
-    try:
-        with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
-            for var_name in dependent_vars:
-                df_subset = df_before_pivot[index_cols + [var_name]].copy()
-                if df_subset.duplicated(subset=index_cols).any():
-                    num_dups = df_subset.duplicated(subset=index_cols).sum()
-                    helper._log_message(
-                        "WARN", "Download", None,
-                        f"Found {num_dups} duplicate index entries for var '{var_name}'. Keeping first occurrence.",
-                    )
-                    df_subset = df_subset.drop_duplicates(subset=index_cols, keep="first")
+    with pd.ExcelWriter(output_buffer, engine="openpyxl") as writer:
+        for var_name in dependent_vars:
+            df_subset = df_before_pivot[index_cols + [var_name]].copy()
+            if df_subset.duplicated(subset=index_cols).any():
+                num_dups = df_subset.duplicated(subset=index_cols).sum()
+                helper._log_message(
+                    "WARN", "Download", None,
+                    f"Found {num_dups} duplicate index entries for var '{var_name}'. Keeping first occurrence.",
+                )
+                df_subset = df_subset.drop_duplicates(subset=index_cols, keep="first")
 
-                pivot_idx = [c for c in index_cols if c != "filename"]
-                df_pivot = df_subset.pivot_table(
-                    index=pivot_idx, columns="filename", values=var_name
-                )
-                df_pivot.to_excel(
-                    writer,
-                    sheet_name=helper.clean_excel_sheet_name(var_name),
-                    index=True,
-                    float_format="%.6g",
-                    na_rep="NaN",
-                )
-        output_buffer.seek(0)
-        return output_buffer.getvalue()
-    finally:
-        output_buffer.close()
+            pivot_idx = [c for c in index_cols if c != "filename"]
+            df_pivot = df_subset.pivot_table(
+                index=pivot_idx, columns="filename", values=var_name
+            )
+            df_pivot.to_excel(
+                writer,
+                sheet_name=helper.clean_excel_sheet_name(var_name),
+                index=True,
+                float_format="%.6g",
+                na_rep="NaN",
+            )
+
+    return output_buffer.getvalue()
 
 
 def _build_pdf_bytes(results: list) -> bytes:
-    """Build a multi-page PDF with summary plots (2 files per A4 landscape page)."""
+    """Render summary plots 2 files per A4 landscape page."""
     num_files = len(results)
-    helper._log_message("INFO", "PDF Export", None, f"Starting PDF generation for {num_files} files (2 per page).")
+    helper._log_message("INFO", "PDF Export", None, f"Generating PDF for {num_files} files (2 per page).")
 
-    A4_W = 11.69
-    A4_H = 8.27
-
+    A4_W, A4_H = 11.69, 8.27
     pdf_buffer = io.BytesIO()
-    try:
-        with PdfPages(pdf_buffer) as pdf:
-            for i in range(0, num_files, 2):
-                fig = None
-                try:
-                    fig, axes = plt.subplots(2, 3, figsize=(A4_W, A4_H), squeeze=False)
-                    fig.set_layout_engine("tight", pad=1.5)
 
+    with PdfPages(pdf_buffer) as pdf:
+        for i in range(0, num_files, 2):
+            fig = None
+            try:
+                fig, axes = plt.subplots(2, 3, figsize=(A4_W, A4_H), squeeze=False)
+                fig.set_layout_engine("tight", pad=1.5)
+
+                plotting._generate_summary_plots_for_file(
+                    results[i], axes=axes[0, :], current_col=constants.CURRENT_COL_NAME
+                )
+                if i + 1 < num_files:
                     plotting._generate_summary_plots_for_file(
-                        results[i], axes=axes[0, :], current_col=constants.CURRENT_COL_NAME
+                        results[i + 1], axes=axes[1, :], current_col=constants.CURRENT_COL_NAME
                     )
-                    if i + 1 < num_files:
-                        plotting._generate_summary_plots_for_file(
-                            results[i + 1], axes=axes[1, :], current_col=constants.CURRENT_COL_NAME
-                        )
-                    else:
-                        for ax_empty in axes[1, :]:
-                            ax_empty.axis("off")
+                else:
+                    for ax_empty in axes[1, :]:
+                        ax_empty.axis("off")
 
-                    pdf.savefig(fig)
-                except Exception as e_page:
-                    helper._log_message(
-                        "ERROR", "PDF Export", None,
-                        f"Failed to create PDF page starting with file {i+1} ({results[i]['original_filename']}): {e_page}",
-                    )
-                    traceback.print_exc()
-                finally:
-                    if fig is not None:
-                        plt.close(fig)
+                pdf.savefig(fig)
+            except Exception as e_page:
+                helper._log_message(
+                    "ERROR", "PDF Export", None,
+                    f"Failed PDF page {i+1} ({results[i]['original_filename']}): {e_page}",
+                )
+                traceback.print_exc()
+            finally:
+                if fig is not None:
+                    plt.close(fig)
 
-            page_count = pdf.get_pagecount()
-    finally:
-        pdf_buffer.seek(0)
-        pdf_content = pdf_buffer.getvalue()
-        pdf_buffer.close()
+        page_count = pdf.get_pagecount()
 
-    helper._log_message("INFO", "PDF Export", None, f"PDF generation complete ({page_count} pages).")
+    pdf_content = pdf_buffer.getvalue()
+    pdf_buffer.close()
+
+    helper._log_message("INFO", "PDF Export", None, f"PDF complete ({page_count} pages).")
     if not pdf_content:
         raise RuntimeError("Generated PDF was empty.")
     return pdf_content
 
 
-# ==============================================================================
-# Server
-# ==============================================================================
+def _file_plot_block(i: int, filename: str, content):
+    return ui.div(
+        ui.hr() if i > 0 else None,
+        ui.h5(filename),
+        ui.row(ui.column(12, content)),
+    )
 
-def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
+def server(input, output, session):
     loaded_abf_data = reactive.Value([])
 
     @reactive.Calc
     def selected_efel_features() -> list:
-        """Combine basic and advanced feature selections."""
         features = [
             f for f in constants.BASIC_EFEL_FEATURES
             if f in AVAILABLE_EFEL_FEATURES and getattr(input, f"basic_feature_{f}")()
@@ -263,7 +254,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     @reactive.Effect
     @reactive.event(input.abf_files)
     def _load_abf_files():
-        """Loads ABF files selected by the user."""
         file_infos = input.abf_files()
         if not file_infos:
             loaded_abf_data.set([])
@@ -304,7 +294,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
     @reactive.Calc
     def analysis_results_list():
-        """Runs analysis on all loaded ABF files."""
         channel = input.channel_selection()
         return [
             {
@@ -327,10 +316,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
 
     @reactive.Calc
     def combined_analysis_df() -> pd.DataFrame:
-        """
-        Combines analysis results from individual files into a single DataFrame.
-        Returns an empty DataFrame if no valid results exist or on error.
-        """
+        """Concatenate valid per-file DataFrames, returning empty on failure."""
         results_list = analysis_results_list()
         valid_dfs = [
             r.get("analysis_df")
@@ -351,7 +337,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     @output
     @render.text
     def analysis_summary_text():
-        """Displays a summary of loaded files and analysis status."""
         results = analysis_results_list()
         num_total = len(results)
         if num_total == 0:
@@ -362,46 +347,46 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         num_analyzed_ok = sum(1 for r in results if helper.is_valid_analysis_df(r.get("analysis_df")))
         num_analysis_failed = num_total - num_analyzed_ok - num_load_err
 
-        summary = (
-            f"--- File Status ---\n"
-            f"Total Files Attempted: {num_total}\n"
-            f"Successfully Loaded: {num_load_ok}\n"
-            f"Load Errors: {num_load_err}\n"
-            f"Successfully Analyzed: {num_analyzed_ok}\n"
-            f"Analysis Skipped/Failed: {num_analysis_failed}\n"
-            f"---\n"
-            f"--- Current Settings ---\n"
-            f"Stimulus Epoch Index Used: {input.stimulus_epoch_index()}\n"
-            f"Spike V Threshold: {input.detection_threshold()} mV\n"
-            f"Spike dV/dt Threshold: {input.derivative_threshold()} mV/ms\n"
-            f"Debug Plots Enabled: {'Yes' if input.debug_plots() else 'No'}\n"
-            f"# eFEL Features Selected: {len(selected_efel_features())}\n"
-            f"---\n"
-        )
+        lines = [
+            "--- File Status ---",
+            f"Total Files Attempted: {num_total}",
+            f"Successfully Loaded: {num_load_ok}",
+            f"Load Errors: {num_load_err}",
+            f"Successfully Analyzed: {num_analyzed_ok}",
+            f"Analysis Skipped/Failed: {num_analysis_failed}",
+            "---",
+            "--- Current Settings ---",
+            f"Stimulus Epoch Index Used: {input.stimulus_epoch_index()}",
+            f"Spike V Threshold: {input.detection_threshold()} mV",
+            f"Spike dV/dt Threshold: {input.derivative_threshold()} mV/ms",
+            f"Debug Plots Enabled: {'Yes' if input.debug_plots() else 'No'}",
+            f"# eFEL Features Selected: {len(selected_efel_features())}",
+            "---",
+        ]
 
         first_ok = next((r for r in results if r.get("abf_object")), None)
         if first_ok:
-            summary += f"First File Info ({first_ok['original_filename']}):\n"
-            summary += helper.get_abf_info_text(first_ok["abf_object"], first_ok["original_filename"])
-            summary += "\n---\n"
+            lines.append(f"First File Info ({first_ok['original_filename']}):")
+            lines.append(helper.get_abf_info_text(first_ok["abf_object"], first_ok["original_filename"]))
+            lines.append("---")
 
         first_analyzed = next((r for r in results if helper.is_valid_analysis_df(r.get("analysis_df"))), None)
         if first_analyzed:
             cols = ", ".join(first_analyzed["analysis_df"].columns)
             max_line = 70
             wrapped = "\n".join(cols[i:i + max_line] for i in range(0, len(cols), max_line))
-            summary += f"--- Output Columns ({first_analyzed['original_filename']}) ---\n{wrapped}\n"
+            lines.append(f"--- Output Columns ({first_analyzed['original_filename']}) ---")
+            lines.append(wrapped)
         elif num_load_ok > 0:
-            summary += "--- Output Columns ---\n(Waiting for successful analysis...)\n"
+            lines.append("--- Output Columns ---\n(Waiting for successful analysis...)")
         else:
-            summary += "--- Output Columns ---\n(Waiting for files to load...)\n"
+            lines.append("--- Output Columns ---\n(Waiting for files to load...)")
 
-        return summary
+        return "\n".join(lines)
 
     @output
     @render.ui
     def dynamic_summary_plots_ui():
-        """Dynamically generates UI for raw trace, spike count, and phase-plane plots."""
         results = analysis_results_list()
         req(results)
 
@@ -421,34 +406,25 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 plot_fig = None
 
                 if plot_src:
-                    file_ui = ui.div(
-                        ui.hr() if i > 0 else None,
-                        ui.h5(filename),
-                        ui.row(
-                            ui.column(
-                                12,
-                                ui.img(
-                                    src=plot_src,
-                                    style="width: 100%; height: auto; max-width: 1400px; border: 1px solid #ddd;",
-                                ),
-                            )
+                    ui_elements.append(_file_plot_block(
+                        i, filename,
+                        ui.img(
+                            src=plot_src,
+                            style="width: 100%; height: auto; max-width: 1400px; border: 1px solid #ddd;",
                         ),
-                    )
-                    ui_elements.append(file_ui)
+                    ))
                 else:
                     helper._log_message("WARN", filename, None, "Figure conversion to src failed for UI summary plot.")
-                    ui_elements.append(ui.div(
-                        ui.hr() if i > 0 else None,
-                        ui.h5(filename),
+                    ui_elements.append(_file_plot_block(
+                        i, filename,
                         ui.p(f"Could not generate summary plot image for {filename}."),
                     ))
 
             except Exception as e_ui_plot:
                 helper._log_message("ERROR", filename, None, f"Failed to generate UI summary plot figure for {filename}: {e_ui_plot}")
                 traceback.print_exc()
-                ui_elements.append(ui.div(
-                    ui.hr() if i > 0 else None,
-                    ui.h5(filename),
+                ui_elements.append(_file_plot_block(
+                    i, filename,
                     ui.p(f"Error generating plots: {e_ui_plot}", style="color: red;"),
                 ))
             finally:
@@ -460,7 +436,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     @output
     @render.ui
     def dynamic_debug_plots_ui():
-        """Dynamically generates UI for the debug plots."""
         if not input.debug_plots():
             return ui.tags.p("Debug plots are disabled in the configuration.")
 
@@ -477,7 +452,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                 plots_found = True
                 debug_plot_src = helper.fig_to_src_and_close(debug_fig)
                 if debug_plot_src:
-                    file_ui = ui.div(
+                    ui_elements.append(ui.div(
                         ui.h5(f"Debug Details: {filename}"),
                         ui.row(
                             ui.column(
@@ -486,8 +461,7 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
                             )
                         ),
                         ui.hr(),
-                    )
-                    ui_elements.append(file_ui)
+                    ))
                 else:
                     helper._log_message("WARN", filename, None, "Figure conversion to src failed for UI debug plot.")
                     ui_elements.append(ui.div(
@@ -504,7 +478,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
     @output
     @render.data_frame
     def analysis_data_table():
-        """Renders the combined analysis DataFrame."""
         df = combined_analysis_df()
         if df.empty:
             return pd.DataFrame()
@@ -514,7 +487,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         filename=lambda: f"ABF_analysis_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
     )
     def download_analysis_csv():
-        """Provides the combined analysis results as a CSV download."""
         df_to_download = combined_analysis_df()
         req(
             df_to_download is not None and not df_to_download.empty,
@@ -529,7 +501,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         filename=lambda: f"ABF_analysis_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     )
     def download_analysis_excel():
-        """Downloads analysis results. Each sheet represents one dependent variable."""
         df = combined_analysis_df()
         req(
             df is not None and not df.empty,
@@ -547,7 +518,6 @@ def server(input: shiny.Inputs, output: shiny.Outputs, session: shiny.Session):
         filename=lambda: f"ABF_Summary_Plots_{len(loaded_abf_data())}files_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     )
     def download_plots_pdf():
-        """Generates and downloads a multi-page PDF with summary plots."""
         results = analysis_results_list()
         req(
             results,
