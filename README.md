@@ -15,17 +15,46 @@ A [Shiny](https://shiny.posit.co/py/) web application written in Python for anal
 
 ## Installation
 
-### Using devenv (Recommended)
+Choose the method that best fits your platform and workflow.
 
-The repository includes a [devenv](https://devenv.sh/) configuration that automatically sets up a Python 3.12 virtual environment with all dependencies:
+### Docker (Recommended — Cross-Platform)
+
+The easiest way to run Spike Doctor on any system with Docker installed (Linux, macOS, or Windows):
 
 ```bash
 git clone https://github.com/marsiwiec/spike-doctor.git
 cd spike-doctor
-# If you have devenv installed, the environment activates automatically via direnv after you run `direnv allow`
+docker compose up
 ```
 
+Then open http://localhost:8000 in your web browser.
+
+Alternatively, build and run manually:
+
+```bash
+docker build -t spike-doctor .
+docker run -p 8000:8000 spike-doctor
+```
+
+### PyInstaller — Windows Executable
+
+A standalone Windows executable is available for users who prefer not to install Docker or Python.
+
+1. Download `SpikeDoctor.exe` from the [Releases](https://github.com/marsiwiec/spike-doctor/releases) page.
+2. Double-click `SpikeDoctor.exe`.
+3. Your default browser will open automatically at http://127.0.0.1:8000.
+4. Keep the console window open while using the application.
+
+> **Note:** The executable must be built on Windows. To build from source:
+> ```bash
+> pip install pyinstaller
+> pyinstaller SpikeDoctor.spec
+> ```
+> The output will be in `dist/SpikeDoctor/`.
+
 ### Manual Installation
+
+If you prefer a native Python environment:
 
 ```bash
 git clone https://github.com/marsiwiec/spike-doctor.git
@@ -35,15 +64,23 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
-
-Start the application:
+Then start the application:
 
 ```bash
 shiny run app.py
 ```
 
-Then open http://127.0.0.1:8000 in your web browser.
+Open http://127.0.0.1:8000 in your web browser.
+
+### Using devenv (Alternative)
+
+For [devenv](https://devenv.sh/) users, a Nix-based configuration is included:
+
+```bash
+git clone https://github.com/marsiwiec/spike-doctor.git
+cd spike-doctor
+# If you have devenv installed, the environment activates automatically via direnv after you run `direnv allow`
+```
 
 ### Quick Start
 
