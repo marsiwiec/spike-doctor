@@ -23,24 +23,101 @@ def _build_efel_trace(
     """Build an eFEL trace dict and return the stimulus current in pA."""
     abf.setSweep(sweep_num, channel=channel)
 
-    raw_level = abf.sweepEpochs.levels[stimulus_epoch_index]
-    unit_raw = getattr(abf, "sweepUnitsC", "").lower()
-
-    if "na" in unit_raw:
-        stimulus_current_nA = raw_level
-    elif "pa" in unit_raw or not unit_raw:
-        stimulus_current_nA = raw_level / 1000.0
+    # Use the correct DAC channel for stimulus epochs
+    epoch_waveform = helper.get_epoch_waveform_for_sweep(abf, sweep_num, channel)
+    if epoch_waveform is None:
+        num_epochs = 0
     else:
+        num_epochs = len(epoch_waveform.p1s)
+
+    # Determine stimulus window
+    if epoch_waveform is not None and num_epochs > 2 and stimulus_epoch_index < num_epochs:
+        # Normal case: requested epoch is valid and there are protocol epochs.
+        stim_start_pt = epoch_waveform.p1s[stimulus_epoch_index]
+        stim_end_pt = epoch_waveform.p2s[stimulus_epoch_index]
+        epoch_idx_used = stimulus_epoch_index
+    elif epoch_waveform is not None and num_epochs > 2:
+        # Requested index out of range, but there are protocol epochs.
+        # Fall back to the first protocol epoch (index 1, skipping pre-epoch).
+        epoch_idx_used = 1
+        stim_start_pt = epoch_waveform.p1s[epoch_idx_used]
+        stim_end_pt = epoch_waveform.p2s[epoch_idx_used]
         helper._log_message(
             "WARN", getattr(abf, "abfID", "?"), sweep_num,
-            f"Command units are '{unit_raw}'. Assuming pA."
+            f"Stimulus epoch index {stimulus_epoch_index} out of range "
+            f"(epochs: {num_epochs}). Using epoch {epoch_idx_used} instead."
         )
-        stimulus_current_nA = raw_level / 1000.0
+    elif epoch_waveform is not None and num_epochs == 2:
+        # Only pre-epoch and post-epoch (no protocol epochs).
+        # Use the post-epoch (index 1) as the stimulus window.
+        # The pre-epoch (index 0) provides the baseline for voltage_base.
+        epoch_idx_used = 1
+        stim_start_pt = epoch_waveform.p1s[epoch_idx_used]
+        stim_end_pt = epoch_waveform.p2s[epoch_idx_used]
+        helper._log_message(
+            "INFO", getattr(abf, "abfID", "?"), sweep_num,
+            "No protocol epochs found. Using post-holding period as stimulus window."
+        )
+    else:
+        # Free-running or no epochs at all: use a baseline window
+        # followed by the rest of the sweep as the stimulus window.
+        epoch_idx_used = None
+        sweep_points = getattr(abf, "sweepPointCount", 0)
+        stim_start_pt = max(1, sweep_points // 64)
+        stim_end_pt = sweep_points
+        if num_epochs == 0:
+            helper._log_message(
+                "INFO", getattr(abf, "abfID", "?"), sweep_num,
+                "No stimulus epochs found. Treating as free-running (stimulus = 0 pA)."
+            )
+        else:
+            helper._log_message(
+                "WARN", getattr(abf, "abfID", "?"), sweep_num,
+                f"Stimulus epoch index {stimulus_epoch_index} out of range "
+                f"(epochs: {num_epochs}). Using full sweep as stimulus window."
+            )
 
-    stimulus_current_pA = stimulus_current_nA * 1000.0
+    stim_start_ms = stim_start_pt * abf.dataSecPerPoint * 1000.0
+    stim_end_ms = stim_end_pt * abf.dataSecPerPoint * 1000.0
 
-    stim_start_ms = abf.sweepEpochs.p1s[stimulus_epoch_index] * abf.dataSecPerPoint * 1000.0
-    stim_end_ms = abf.sweepEpochs.p2s[stimulus_epoch_index] * abf.dataSecPerPoint * 1000.0
+    # --- Stimulus current: trace-based (preferred) vs epoch-level fallback ---
+    sweep_c = helper.get_sweep_c(abf, sweep_num, channel=channel)
+    stimulus_current_pA = np.nan
+
+    if sweep_c is not None and len(sweep_c) > int(stim_start_pt):
+        end_pt = min(int(stim_end_pt), len(sweep_c)) if int(stim_end_pt) > 0 else len(sweep_c)
+        if end_pt > int(stim_start_pt):
+            stimulus_current_pA = float(np.median(sweep_c[int(stim_start_pt):end_pt]))
+
+    # Fallback to epoch table if trace-based value is missing or effectively zero
+    if not (np.isfinite(stimulus_current_pA) and not np.isclose(stimulus_current_pA, 0)):
+        if epoch_waveform is not None and epoch_idx_used is not None:
+            raw_level = epoch_waveform.levels[epoch_idx_used]
+        else:
+            raw_level = 0.0
+
+        dac_channel = helper.get_stimulus_dac_channel(abf, channel)
+        unit_raw = helper.get_dac_units(abf, dac_channel).lower()
+
+        if "na" in unit_raw:
+            stimulus_current_pA = raw_level * 1000.0
+        elif "pa" in unit_raw or not unit_raw:
+            stimulus_current_pA = raw_level
+        else:
+            helper._log_message(
+                "WARN", getattr(abf, "abfID", "?"), sweep_num,
+                f"Command units are '{unit_raw}'. Assuming pA."
+            )
+            stimulus_current_pA = raw_level
+
+        if not np.isfinite(stimulus_current_pA):
+            helper._log_message(
+                "WARN", getattr(abf, "abfID", "?"), sweep_num,
+                "Stimulus current could not be determined. Defaulting to 0 pA."
+            )
+            stimulus_current_pA = 0.0
+
+    stimulus_current_nA = stimulus_current_pA / 1000.0
 
     trace = {
         "T": abf.sweepX * 1000.0,
@@ -62,6 +139,7 @@ def _generate_debug_plot(
     trace: dict,
     V_base: float,
     abf_id_str: str,
+    channel: int = 0,
 ) -> Optional[plt.Figure]:
     """Generate a debug plot for a single sweep. Returns the figure or None."""
     fig = None
@@ -87,8 +165,9 @@ def _generate_debug_plot(
         axs[0].grid(True, linestyle=":", alpha=0.5)
 
         # Current trace
-        if hasattr(abf, "sweepC") and isinstance(abf.sweepC, np.ndarray):
-            axs[1].plot(abf.sweepX, abf.sweepC, color="royalblue", lw=0.7)
+        sweep_c = helper.get_sweep_c(abf, sweep_num, channel=channel)
+        if sweep_c is not None:
+            axs[1].plot(abf.sweepX, sweep_c, color="royalblue", lw=0.7)
         else:
             axs[1].text(
                 0.5, 0.5, "Sweep Command (sweepC)\nNot Available",
@@ -100,7 +179,9 @@ def _generate_debug_plot(
             color="salmon", alpha=0.2, zorder=-10,
         )
         axs[1].grid(True, linestyle=":", alpha=0.5)
-        axs[1].set_ylabel(f"Current ({getattr(abf, 'sweepUnitsC', 'pA')})")
+        dac_channel = helper.get_stimulus_dac_channel(abf, channel)
+        c_units = helper.get_dac_units(abf, dac_channel) or "pA"
+        axs[1].set_ylabel(f"Current ({c_units})")
         axs[1].set_xlabel("Time (s)")
 
         return fig
@@ -193,8 +274,30 @@ def run_analysis_on_abf(
     if not helper._validate_abf_for_analysis(abf, abf_id_str):
         return analysis_output
 
+    # Detect file type and filter stimulus-dependent features for non-stimulus files
+    file_info = helper.get_file_type_info(abf)
+    effective_user_features = list(user_selected_features)
+    effective_internal_features = list(constants.REQUIRED_INTERNAL_EFEL_FEATURES)
+
+    if file_info["is_stimulus_free"] or file_info["is_current_zero"] or file_info["is_gap_free"]:
+        omitted = []
+        for feat_list, label in [
+            (effective_user_features, "user-selected"),
+            (effective_internal_features, "internal"),
+        ]:
+            before = set(feat_list)
+            feat_list[:] = helper.filter_stimulus_dependent_features(feat_list)
+            omitted.extend([f for f in before if f not in feat_list])
+        if omitted:
+            unique_omitted = sorted(set(omitted))
+            helper._log_message(
+                "INFO", abf_id_str, None,
+                f"Stimulus-free/current-zero/gap-free file detected. "
+                f"Omitting stimulus-dependent features: {', '.join(unique_omitted)}."
+            )
+
     all_efel_features_needed = list(
-        set(user_selected_features) | set(constants.REQUIRED_INTERNAL_EFEL_FEATURES)
+        set(effective_user_features) | set(effective_internal_features)
     )
     try:
         efel.reset()
@@ -272,7 +375,7 @@ def run_analysis_on_abf(
                     Cm_manual_pF = np.nan
 
             max_len = 1
-            for feat in user_selected_features:
+            for feat in effective_user_features:
                 val = efel_results_parsed.get(feat, [np.nan])
                 if isinstance(val, list) and len(val) > max_len:
                     max_len = len(val)
@@ -285,7 +388,7 @@ def run_analysis_on_abf(
                     "event_index": i,
                     "capacitance_pF": Cm_manual_pF if i == 0 else np.nan,
                 }
-                for feat in user_selected_features:
+                for feat in effective_user_features:
                     val_list = efel_results_parsed.get(feat, [np.nan])
                     sweep_data[feat] = val_list[i] if i < len(val_list) else np.nan
 
@@ -294,7 +397,7 @@ def run_analysis_on_abf(
 
             # Debug plot (once per file, middle sweep)
             if debug_plot and sweep_num == middle_sweep and not debug_plot_generated:
-                fig_debug = _generate_debug_plot(abf, sweep_num, trace, V_base, abf_id_str)
+                fig_debug = _generate_debug_plot(abf, sweep_num, trace, V_base, abf_id_str, channel=channel_selection)
                 if fig_debug is not None:
                     analysis_output["debug_plot_fig"] = fig_debug
                     debug_plot_generated = True

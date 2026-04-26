@@ -51,6 +51,20 @@ REQUIRED_INTERNAL_EFEL_FEATURES: List[str] = [
     "ohmic_input_resistance",
 ]
 
+# Features that require a stimulus step to be meaningful
+STIMULUS_DEPENDENT_EFEL_FEATURES: List[str] = [
+    "time_constant",
+    "time_constant_slow",
+    "ohmic_input_resistance",
+    "voltage_deflection",
+    "voltage_deflection_begin",
+    "voltage_deflection_vb_ssse",
+    "steady_state_voltage_stimend",
+    "voltage_after_stim",
+    "single_decay_time_constant_after_stim",
+    "multiple_decay_time_constant_after_stim",
+]
+
 # --- Plotting & Debugging ---
 MAX_RAW_PLOT_SWEEPS: int = 100
 CURRENT_COL_NAME = "current_step_pA"
