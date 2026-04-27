@@ -4,6 +4,13 @@ CLAUDE.md
 # Devenv
 .devenv*
 devenv.local.nix
+devenv.nix
+devenv.yaml
+devenv.lock
+.devenv.flake.nix
+
+# Nix
+result
 
 # direnv
 .direnv

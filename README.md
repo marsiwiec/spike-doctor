@@ -47,39 +47,40 @@ A standalone Windows executable is available for users who prefer not to install
 
 > **Note:** The executable must be built on Windows. To build from source:
 > ```bash
-> pip install pyinstaller
+> uv pip install pyinstaller
 > pyinstaller SpikeDoctor.spec
 > ```
 > The output will be in `dist/SpikeDoctor/`.
 
-### Manual Installation
+### Manual Installation (uv)
 
-If you prefer a native Python environment:
+If you prefer a native Python environment, the project uses [uv](https://docs.astral.sh/uv/) for dependency management:
 
 ```bash
 git clone https://github.com/marsiwiec/spike-doctor.git
 cd spike-doctor
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
 ```
 
 Then start the application:
 
 ```bash
-shiny run app.py
+uv run shiny run app.py
 ```
 
 Open http://127.0.0.1:8000 in your web browser.
 
-### Using devenv (Alternative)
+### Using Nix + uv (Alternative)
 
-For [devenv](https://devenv.sh/) users, a Nix-based configuration is included:
+For [Nix](https://nixos.org/) users, a [flake-parts](https://flake.parts/) configuration is included. It provides `uv`, Python 3.12, `ruff`, and `ty` in a reproducible shell:
 
 ```bash
 git clone https://github.com/marsiwiec/spike-doctor.git
 cd spike-doctor
-# If you have devenv installed, the environment activates automatically via direnv after you run `direnv allow`
+# If you have nix-direnv installed, the environment activates automatically after you run `direnv allow`
+nix develop  # Or enter the dev shell manually
+uv sync
+uv run shiny run app.py
 ```
 
 ### Quick Start
