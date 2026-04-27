@@ -30,8 +30,8 @@ Then open http://localhost:8000.
 Pre-built binaries for all platforms are available on the [Releases](https://github.com/marsiwiec/spike-doctor/releases) page:
 
 - **Windows**: `SpikeDoctor-windows.zip` -- extract and run `SpikeDoctor.exe`
-- **macOS**: `SpikeDoctor-macos.zip` -- extract and run the `SpikeDoctor` binary
-- **Linux**: `SpikeDoctor-linux.zip` -- extract and run the `SpikeDoctor` binary
+- **macOS**: `SpikeDoctor-macos.zip` -- extract and run
+- **Linux**: `SpikeDoctor-linux.zip` -- extract and run
 
 The console window must stay open while the app is running.
 
