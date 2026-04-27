@@ -89,8 +89,11 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: Upload to GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes 2>/dev/null || true
           gh release upload "${GITHUB_REF_NAME}" artifacts/*.zip --clobber
