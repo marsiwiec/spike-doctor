@@ -25,11 +25,17 @@ docker compose up
 
 Then open http://localhost:8000.
 
-### Windows executable
+### Standalone executables
 
-Download `SpikeDoctor.exe` from the [Releases](https://github.com/marsiwiec/spike-doctor/releases) page and run it. The console window must stay open while the app is running.
+Pre-built binaries for all platforms are available on the [Releases](https://github.com/marsiwiec/spike-doctor/releases) page:
 
-> To build from source on Windows:
+- **Windows**: `SpikeDoctor-windows.zip` -- extract and run `SpikeDoctor.exe`
+- **macOS**: `SpikeDoctor-macos.zip` -- extract and run the `SpikeDoctor` binary
+- **Linux**: `SpikeDoctor-linux.zip` -- extract and run the `SpikeDoctor` binary
+
+The console window must stay open while the app is running.
+
+> To build from source:
 > ```bash
 > uv pip install pyinstaller
 > pyinstaller SpikeDoctor.spec
