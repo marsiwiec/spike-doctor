@@ -21,7 +21,7 @@ jobs:
       - run: uv run pyinstaller SpikeDoctor.spec
       - run: |
           cd dist
-          Compress-Archive -Path SpikeDoctor -DestinationPath ../SpikeDoctor-windows.zip
+          Compress-Archive -Path SpikeDoctor.exe -DestinationPath ../SpikeDoctor-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: SpikeDoctor-windows
