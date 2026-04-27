@@ -69,5 +69,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/spike-doctor-icon.ico",
+    # icon="assets/spike-doctor-icon.ico",  # Uncomment if icon exists
 )
