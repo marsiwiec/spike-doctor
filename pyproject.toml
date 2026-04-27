@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "spike-doctor"
-version = "0.1.0"
+version = "0.7.0"
 description = "Shiny web application for analyzing whole-cell current clamp recordings"
 requires-python = ">=3.12"
 dependencies = [
