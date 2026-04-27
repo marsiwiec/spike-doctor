@@ -1,0 +1,24 @@
+[project]
+name = "spike-doctor"
+version = "0.1.0"
+description = "Shiny web application for analyzing whole-cell current clamp recordings"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy==2.3.5",
+    "pandas",
+    "matplotlib",
+    "shiny",
+    "openpyxl",
+    "pyabf",
+    "efel",
+    "quantities==0.15",
+]
+
+[dependency-groups]
+dev = ["pyinstaller"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
