@@ -94,7 +94,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes 2>/dev/null || true
+          VERSION=${GITHUB_REF_NAME#v}
+          awk -v ver="$VERSION" '
+            $0 ~ "^## " ver {found=1; next}
+            found && $0 ~ "^## " {exit}
+            found {print}
+          ' CHANGELOG.md > /tmp/release_notes.md
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --notes-file /tmp/release_notes.md
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --notes-file /tmp/release_notes.md
+          fi
+
           gh release upload "${GITHUB_REF_NAME}" artifacts/*.zip --clobber
