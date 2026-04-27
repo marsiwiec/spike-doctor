@@ -1,0 +1,10 @@
+services:
+  spike-doctor:
+    build: .
+    container_name: spike-doctor
+    ports:
+      - "8000:8000"
+    # Uncomment below for live development with hot-reload
+    # volumes:
+    #   - .:/app
+    restart: unless-stopped

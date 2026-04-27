@@ -4,6 +4,13 @@ CLAUDE.md
 # Devenv
 .devenv*
 devenv.local.nix
+devenv.nix
+devenv.yaml
+devenv.lock
+.devenv.flake.nix
+
+# Nix
+result
 
 # direnv
 .direnv
@@ -38,12 +45,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
 
 # Installer logs
 pip-log.txt
