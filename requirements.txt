@@ -1,0 +1,8 @@
+numpy==2.3.5
+pandas
+matplotlib
+shiny
+openpyxl
+pyabf
+efel
+quantities==0.15
