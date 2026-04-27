@@ -27,7 +27,7 @@ Then open http://localhost:8000.
 
 ### Standalone executables
 
-Pre-built binaries for all platforms are available on the [Releases](https://github.com/marsiwiec/spike-doctor/releases) page:
+Pre-built binaries for all platforms [are available](https://github.com/marsiwiec/spike-doctor/releases/latest):
 
 - **Windows**: `SpikeDoctor-windows.zip` -- extract and run `SpikeDoctor.exe`
 - **macOS**: `SpikeDoctor-macos.zip` -- extract and run

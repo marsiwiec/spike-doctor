@@ -1272,8 +1272,8 @@ wheels = [
 
 [[package]]
 name = "spike-doctor"
-version = "0.1.0"
-source = { virtual = "." }
+version = "0.7.0"
+source = { editable = "." }
 dependencies = [
     { name = "efel" },
     { name = "matplotlib" },
@@ -1288,7 +1288,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "pyinstaller" },
-    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -1304,10 +1303,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pyinstaller" },
-    { name = "pytest" },
-]
+dev = [{ name = "pyinstaller" }]
 
 [[package]]
 name = "starlette"
