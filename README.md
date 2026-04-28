@@ -83,6 +83,28 @@ uv run shiny run app.py
 4. **View results** in the Summary Plots, Results Table, and Debug Plots tabs.
 5. **Export** as CSV, Excel, or PDF.
 
+## File Support
+
+- **Format**: Axon Binary Format (ABF)
+- **Recording mode**: Current clamp only so far
+
+### Known limitation: ABF v1 with float data
+
+Some older ABF v1 files (e.g., recorded with legacy Axon software or exported from other programs) store data as **32-bit float** rather than **16-bit integer**. `pyABF` does not support float-encoded ABF v1 files and will raise:
+
+```
+ValueError: Support for float data is not implemented
+```
+
+**Workaround**: Open the file in **Clampfit**, then re-save it as an ABF v2 file:
+
+1. Open the file in Clampfit.
+2. Go to **File → Save As...**
+3. Choose **ABF 2.0** as the file format.
+4. Save the file and load it into Spike Doctor.
+
+Alternatively, use the **Data File Index** feature in Clampfit to batch-convert files to ABF v2.
+
 ## Parameters
 
 | Parameter | Description | Default |
@@ -117,11 +139,6 @@ The Advanced tab exposes the full  [eFEL](https://github.com/BlueBrain/eFEL) fea
 ## Calculated Metrics
 
 - **Capacitance (pF)**: `Cm = tau / Rin x 1000`. Only calculated for hyperpolarizing sweeps without spikes.
-
-## File Support
-
-- **Format**: Axon Binary Format (ABF)
-- **Recording mode**: Current clamp only so far
 
 ## License
 
