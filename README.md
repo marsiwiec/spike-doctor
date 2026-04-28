@@ -29,11 +29,22 @@ Then open http://localhost:8000.
 
 Pre-built binaries for all platforms [are available](https://github.com/marsiwiec/spike-doctor/releases/latest):
 
-- **Windows**: `SpikeDoctor-windows.zip` -- extract and run `SpikeDoctor.exe`
-- **macOS**: `SpikeDoctor-macos.zip` -- extract and run
-- **Linux**: `SpikeDoctor-linux.zip` -- extract and run
+| Platform | Architecture | Artifact | Run |
+|---|---|---|---|
+| **Windows** | x64 | `SpikeDoctor-windows-x64.exe` | Download and run directly |
+| **macOS** | x64 (Intel) | `SpikeDoctor-macos-x64` | `chmod +x` then run |
+| **macOS** | arm64 (Apple Silicon) | `SpikeDoctor-macos-arm64` | `chmod +x` then run |
+| **Linux** | x64 | `SpikeDoctor-linux-x64` | `chmod +x` then run |
 
 The console window must stay open while the app is running.
+
+#### Windows security warning
+
+Because the executable is not code-signed, Windows Defender / SmartScreen may show a warning like **"Windows protected your PC"** or **"Microsoft Defender SmartScreen prevented an unrecognized app from starting."**
+
+To proceed:
+1. Click **"More info"** on the warning dialog.
+2. Click **"Run anyway"**.
 
 > To build from source:
 > ```bash
