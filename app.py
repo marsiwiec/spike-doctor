@@ -20,16 +20,17 @@ except Exception as e:
         constants.DEFAULT_EFEL_FEATURES + constants.REQUIRED_INTERNAL_EFEL_FEATURES
     )
 
-ADVANCED_EFEL_FEATURES = sorted([
-    f for f in AVAILABLE_EFEL_FEATURES if f not in constants.BASIC_EFEL_FEATURES
-])
+ADVANCED_EFEL_FEATURES = sorted(
+    [f for f in AVAILABLE_EFEL_FEATURES if f not in constants.BASIC_EFEL_FEATURES]
+)
 
 
 def _create_basic_feature_checkboxes():
     elements = []
-    for feature_id, (display_name, description) in (
-        constants.BASIC_EFEL_FEATURES.items()
-    ):
+    for feature_id, (
+        display_name,
+        description,
+    ) in constants.BASIC_EFEL_FEATURES.items():
         if feature_id in AVAILABLE_EFEL_FEATURES:
             elements.append(
                 ui.tooltip(
@@ -155,8 +156,7 @@ def _build_excel_bytes(df_before_pivot: pd.DataFrame) -> bytes:
         raise ValueError(f"Index columns missing for Excel export: {missing_cols}")
 
     dependent_vars = [
-        c for c in df_before_pivot.columns
-        if c not in index_cols + ["event_index"]
+        c for c in df_before_pivot.columns if c not in index_cols + ["event_index"]
     ]
     if not dependent_vars:
         raise ValueError("No dependent variable columns found for Excel export.")
@@ -195,7 +195,9 @@ def _build_pdf_bytes(results: list) -> bytes:
     """Render summary plots 2 files per A4 landscape page."""
     num_files = len(results)
     helper._log_message(
-        "INFO", "PDF Export", None,
+        "INFO",
+        "PDF Export",
+        None,
         f"Generating PDF for {num_files} files (2 per page).",
     )
 
@@ -230,7 +232,7 @@ def _build_pdf_bytes(results: list) -> bytes:
                     "ERROR",
                     "PDF Export",
                     None,
-                    f"Failed PDF page {i+1} "
+                    f"Failed PDF page {i + 1} "
                     f"({results[i]['original_filename']}): {e_page}",
                 )
                 traceback.print_exc()
@@ -244,7 +246,9 @@ def _build_pdf_bytes(results: list) -> bytes:
     pdf_buffer.close()
 
     helper._log_message(
-        "INFO", "PDF Export", None,
+        "INFO",
+        "PDF Export",
+        None,
         f"PDF complete ({page_count} pages).",
     )
     if not pdf_content:
@@ -266,7 +270,8 @@ def server(input, output, session):
     @reactive.Calc
     def selected_efel_features() -> list:
         features = [
-            f for f in constants.BASIC_EFEL_FEATURES
+            f
+            for f in constants.BASIC_EFEL_FEATURES
             if f in AVAILABLE_EFEL_FEATURES and getattr(input, f"basic_feature_{f}")()
         ]
         features.extend(input.advanced_efel_features() or [])
@@ -298,27 +303,35 @@ def server(input, output, session):
                 except FileNotFoundError:
                     error_msg = "File not found at temporary path."
                     helper._log_message(
-                        "ERROR", filename, None,
+                        "ERROR",
+                        filename,
+                        None,
                         f"{error_msg} Path: {filepath}",
                     )
                 except Exception as e:
                     error_msg = f"Failed to load: {e}"
                     helper._log_message(
-                        "ERROR", filename, None,
+                        "ERROR",
+                        filename,
+                        None,
                         f"{error_msg}\n{traceback.format_exc()}",
                     )
 
-                data_list.append({
-                    "original_filename": filename,
-                    "filepath": str(filepath),
-                    "abf_object": abf_obj,
-                    "load_error": error_msg,
-                })
+                data_list.append(
+                    {
+                        "original_filename": filename,
+                        "filepath": str(filepath),
+                        "abf_object": abf_obj,
+                        "load_error": error_msg,
+                    }
+                )
             p.set(num_files, detail="Loading complete.")
 
         loaded_abf_data.set(data_list)
         helper._log_message(
-            "INFO", "App", None,
+            "INFO",
+            "App",
+            None,
             f"Finished loading {len(data_list)} files.",
         )
 
@@ -356,7 +369,9 @@ def server(input, output, session):
 
         if not valid_dfs:
             helper._log_message(
-                "WARN", "App", None,
+                "WARN",
+                "App",
+                None,
                 "No valid analysis DataFrames to combine.",
             )
             return pd.DataFrame()
@@ -364,7 +379,9 @@ def server(input, output, session):
             return pd.concat(valid_dfs, ignore_index=True, sort=False)
         except Exception as e:
             helper._log_message(
-                "ERROR", "App", None,
+                "ERROR",
+                "App",
+                None,
                 f"Failed to concatenate DataFrames: {e}",
             )
             traceback.print_exc()
@@ -383,13 +400,11 @@ def server(input, output, session):
             )
 
         num_load_ok = sum(
-            1 for r in results
-            if r.get("abf_object") and not r.get("load_error")
+            1 for r in results if r.get("abf_object") and not r.get("load_error")
         )
         num_load_err = sum(1 for r in results if r.get("load_error"))
         num_analyzed_ok = sum(
-            1 for r in results
-            if helper.is_valid_analysis_df(r.get("analysis_df"))
+            1 for r in results if helper.is_valid_analysis_df(r.get("analysis_df"))
         )
         num_analysis_failed = num_total - num_analyzed_ok - num_load_err
 
@@ -422,22 +437,17 @@ def server(input, output, session):
             lines.append("---")
 
         first_analyzed = next(
-            (
-                r for r in results
-                if helper.is_valid_analysis_df(r.get("analysis_df"))
-            ),
+            (r for r in results if helper.is_valid_analysis_df(r.get("analysis_df"))),
             None,
         )
         if first_analyzed:
             cols = ", ".join(first_analyzed["analysis_df"].columns)
             max_line = 70
             wrapped = "\n".join(
-                cols[i : i + max_line]
-                for i in range(0, len(cols), max_line)
+                cols[i : i + max_line] for i in range(0, len(cols), max_line)
             )
             lines.append(
-                f"--- Output Columns "
-                f"({first_analyzed['original_filename']}) ---"
+                f"--- Output Columns ({first_analyzed['original_filename']}) ---"
             )
             lines.append(wrapped)
         elif num_load_ok > 0:
@@ -455,7 +465,7 @@ def server(input, output, session):
 
         ui_elements = []
         for i, result_data in enumerate(results):
-            filename = result_data.get("original_filename", f"File {i+1}")
+            filename = result_data.get("original_filename", f"File {i + 1}")
             plot_fig = None
             try:
                 plot_fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
@@ -469,37 +479,54 @@ def server(input, output, session):
                 plot_fig = None
 
                 if plot_src:
-                    ui_elements.append(_file_plot_block(
-                        i, filename,
-                        ui.img(
-                            src=plot_src,
-                            style=(
-                                "width: 100%; height: auto; "
-                                "max-width: 1400px; border: 1px solid #ddd;"
+                    ui_elements.append(
+                        _file_plot_block(
+                            i,
+                            filename,
+                            ui.img(
+                                src=plot_src,
+                                style=(
+                                    "width: 100%; height: auto; "
+                                    "max-width: 1400px; border: 1px solid #ddd;"
+                                ),
                             ),
-                        ),
-                    ))
+                        )
+                    )
                 else:
                     helper._log_message(
-                        "WARN", filename, None,
+                        "WARN",
+                        filename,
+                        None,
                         "Figure conversion to src failed for UI summary plot.",
                     )
-                    ui_elements.append(_file_plot_block(
-                        i, filename,
-                        ui.p(f"Could not generate summary plot image for {filename}."),
-                    ))
+                    ui_elements.append(
+                        _file_plot_block(
+                            i,
+                            filename,
+                            ui.p(
+                                f"Could not generate summary plot image for {filename}."
+                            ),
+                        )
+                    )
 
             except Exception as e_ui_plot:
                 helper._log_message(
-                    "ERROR", filename, None,
+                    "ERROR",
+                    filename,
+                    None,
                     f"Failed to generate UI summary plot figure for "
                     f"{filename}: {e_ui_plot}",
                 )
                 traceback.print_exc()
-                ui_elements.append(_file_plot_block(
-                    i, filename,
-                    ui.p(f"Error generating plots: {e_ui_plot}", style="color: red;"),
-                ))
+                ui_elements.append(
+                    _file_plot_block(
+                        i,
+                        filename,
+                        ui.p(
+                            f"Error generating plots: {e_ui_plot}", style="color: red;"
+                        ),
+                    )
+                )
             finally:
                 if plot_fig is not None:
                     plt.close(plot_fig)
@@ -525,29 +552,37 @@ def server(input, output, session):
                 plots_found = True
                 debug_plot_src = helper.fig_to_src_and_close(debug_fig)
                 if debug_plot_src:
-                    ui_elements.append(ui.div(
-                        ui.h5(f"Debug Details: {filename}"),
-                        ui.row(
-                            ui.column(
-                                12,
-                                ui.img(
-                                    src=debug_plot_src,
-                                    style="width: 100%; height: auto;",
-                                ),
-                            )
-                        ),
-                        ui.hr(),
-                    ))
+                    ui_elements.append(
+                        ui.div(
+                            ui.h5(f"Debug Details: {filename}"),
+                            ui.row(
+                                ui.column(
+                                    12,
+                                    ui.img(
+                                        src=debug_plot_src,
+                                        style="width: 100%; height: auto;",
+                                    ),
+                                )
+                            ),
+                            ui.hr(),
+                        )
+                    )
                 else:
                     helper._log_message(
-                        "WARN", filename, None,
+                        "WARN",
+                        filename,
+                        None,
                         "Figure conversion to src failed for UI debug plot.",
                     )
-                    ui_elements.append(ui.div(
-                        ui.h5(f"Debug Details: {filename}"),
-                        ui.p(f"Could not generate debug plot image for {filename}."),
-                        ui.hr(),
-                    ))
+                    ui_elements.append(
+                        ui.div(
+                            ui.h5(f"Debug Details: {filename}"),
+                            ui.p(
+                                f"Could not generate debug plot image for {filename}."
+                            ),
+                            ui.hr(),
+                        )
+                    )
         if not plots_found:
             return ui.help_text(
                 "Debug plots are enabled, but none were generated. "
@@ -579,7 +614,9 @@ def server(input, output, session):
         df_to_download = combined_analysis_df()
         req(df_to_download is not None and not df_to_download.empty)
         helper._log_message(
-            "INFO", "Download", None,
+            "INFO",
+            "Download",
+            None,
             f"Generating CSV download for {df_to_download.shape[0]} rows.",
         )
         with io.StringIO() as buf:
@@ -596,14 +633,18 @@ def server(input, output, session):
         df = combined_analysis_df()
         req(df is not None and not df.empty)
         helper._log_message(
-            "INFO", "Download", None,
+            "INFO",
+            "Download",
+            None,
             f"Generating Excel download for {df.shape[0]} rows.",
         )
         try:
             yield _build_excel_bytes(df)
         except Exception as e:
             helper._log_message(
-                "ERROR", "Download", None,
+                "ERROR",
+                "Download",
+                None,
                 f"Critical error during Excel generation: {e}",
             )
             traceback.print_exc()
@@ -622,7 +663,9 @@ def server(input, output, session):
             yield _build_pdf_bytes(results)
         except Exception as e:
             helper._log_message(
-                "ERROR", "PDF Export", None,
+                "ERROR",
+                "PDF Export",
+                None,
                 f"Critical error during PDF generation: {e}",
             )
             traceback.print_exc()
