@@ -4,13 +4,14 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build-windows:
+  build-windows-x64:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,15 +20,13 @@ jobs:
           version: "latest"
       - run: uv sync --dev
       - run: uv run pyinstaller SpikeDoctor.spec
-      - run: |
-          cd dist
-          Compress-Archive -Path SpikeDoctor.exe -DestinationPath ../SpikeDoctor-windows.zip
+      - run: Rename-Item -Path dist/SpikeDoctor.exe -NewName SpikeDoctor-windows-x64.exe
       - uses: actions/upload-artifact@v4
         with:
-          name: SpikeDoctor-windows
-          path: SpikeDoctor-windows.zip
+          name: SpikeDoctor-windows-x64
+          path: dist/SpikeDoctor-windows-x64.exe
 
-  build-macos:
+  build-macos-arm64:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,15 +35,13 @@ jobs:
           version: "latest"
       - run: uv sync --dev
       - run: uv run pyinstaller SpikeDoctor.spec
-      - run: |
-          cd dist
-          zip -r ../SpikeDoctor-macos.zip SpikeDoctor
+      - run: mv dist/SpikeDoctor SpikeDoctor-macos-arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: SpikeDoctor-macos
-          path: SpikeDoctor-macos.zip
+          name: SpikeDoctor-macos-arm64
+          path: SpikeDoctor-macos-arm64.dmg
 
-  build-linux:
+  build-linux-x64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,13 +50,11 @@ jobs:
           version: "latest"
       - run: uv sync --dev
       - run: uv run pyinstaller SpikeDoctor.spec
-      - run: |
-          cd dist
-          zip -r ../SpikeDoctor-linux.zip SpikeDoctor
+      - run: mv dist/SpikeDoctor SpikeDoctor-linux-x64
       - uses: actions/upload-artifact@v4
         with:
-          name: SpikeDoctor-linux
-          path: SpikeDoctor-linux.zip
+          name: SpikeDoctor-linux-x64
+          path: SpikeDoctor-linux-x64
 
   build-docker:
     runs-on: ubuntu-latest
@@ -82,7 +77,7 @@ jobs:
           docker push ghcr.io/${{ github.repository }}:latest
 
   attach-artifacts:
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows-x64, build-macos-arm64, build-linux-x64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -97,4 +92,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes 2>/dev/null || true
-          gh release upload "${GITHUB_REF_NAME}" artifacts/*.zip --clobber
+          gh release upload "${GITHUB_REF_NAME}" artifacts/SpikeDoctor-* --clobber
