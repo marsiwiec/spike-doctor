@@ -8,10 +8,11 @@ A Shiny web application for analyzing whole-cell current-clamp recordings. Spike
 
 - **Batch processing** of multiple ABF files
 - **Spike detection** with configurable voltage and derivative thresholds
-- **Feature extraction** via  [eFEL](https://github.com/BlueBrain/eFEL) (200+ features)
+- **Electrophysiological feature detection** via  [eFEL](https://github.com/BlueBrain/eFEL)
 - **Interactive plots**: raw traces, F-I curves, and phase-plane plots
 - **Exports**: CSV, multi-sheet Excel, and PDF summary plots
-- **Debug mode** with per-sweep stimulus window visualizations
+- **Analysis Logs** tab for real-time troubleshooting
+- **Debug plots** with on-demand sweep selector, detection threshold overlay, and marked spike peaks
 
 ## Installation
 
@@ -79,8 +80,8 @@ uv run shiny run app.py
 
 1. **Upload** one or more `.abf` files.
 2. **Adjust parameters** if your protocol uses a non-standard stimulus epoch or spike thresholds.
-3. **Select features** from the Basic or Advanced tabs.
-4. **View results** in the Summary Plots, Results Table, and Debug Plots tabs.
+3. **Select features** from the Basic tab or search/filter the Advanced tab.
+4. **View results** in the Summary Plots, Results Table, Debug Plots, and Analysis Logs tabs.
 5. **Export** as CSV, Excel, or PDF.
 
 ## File Support
@@ -109,6 +110,7 @@ Alternatively, use the **Data File Index** feature in Clampfit to batch-convert 
 
 | Parameter | Description | Default |
 |---|---|---|
+| **Channel** | ADC channel to analyze (0-based). | 0 |
 | **Stimulus Epoch Index** | Epoch containing the current step (0-based). Most protocols use epoch 2. | 2 |
 | **Detection Threshold** | Voltage threshold for spike detection (mV). | -20 mV |
 | **Derivative Threshold** | Minimum dV/dt to qualify as a spike (mV/ms). | 10 mV/ms |
