@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pyinstaller"]
+dev = ["pyinstaller", "pytest"]
 
 [tool.setuptools]
 py-modules = []
