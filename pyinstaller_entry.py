@@ -9,8 +9,9 @@ import threading
 import time
 import webbrowser
 
-from app import app
 from shiny import run_app
+
+from app import app
 
 
 def _open_browser():

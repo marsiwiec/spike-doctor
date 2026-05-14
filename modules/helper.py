@@ -53,13 +53,15 @@ def get_abf_info_text(abf: pyabf.ABF | None, filename: str) -> str:
         else:
             info_lines.append("Duration: N/A")
 
-        info_lines.extend([
-            f"Sample Rate: {rate} Hz",
-            f"Channels: {getattr(abf, 'channelCount', 'N/A')}",
-            f"Sweeps: {getattr(abf, 'sweepCount', 'N/A')}",
-            f"Voltage Units: {getattr(abf, 'sweepUnitsY', '?')}",
-            f"Current Units: {getattr(abf, 'sweepUnitsC', '?')}",
-        ])
+        info_lines.extend(
+            [
+                f"Sample Rate: {rate} Hz",
+                f"Channels: {getattr(abf, 'channelCount', 'N/A')}",
+                f"Sweeps: {getattr(abf, 'sweepCount', 'N/A')}",
+                f"Voltage Units: {getattr(abf, 'sweepUnitsY', '?')}",
+                f"Current Units: {getattr(abf, 'sweepUnitsC', '?')}",
+            ]
+        )
 
         sweep_points = getattr(abf, "sweepPointCount", 0)
         if getattr(abf, "sweepCount", 0) > 0 and rate > 0 and sweep_points > 0:
